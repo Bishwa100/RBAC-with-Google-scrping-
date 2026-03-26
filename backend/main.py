@@ -1,11 +1,34 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from celery.result import AsyncResult
 import uuid
+import threading
+from datetime import datetime
 
-from models import SearchRequest, SearchResponse, JobStatus
-from database import init_db, create_job, get_job
-from tasks import celery_app, scrape_topic_task, AVAILABLE_SOURCES
+# Try to import Celery components (optional)
+try:
+    from celery.result import AsyncResult
+    CELERY_AVAILABLE = True
+except ImportError:
+    CELERY_AVAILABLE = False
+    AsyncResult = None
+
+from models import SearchRequest, SearchResponse, JobStatus, AnalyzeRequest, AnalyzeResponse
+from database import init_db, create_job, get_job, update_job_status
+
+# Try to import tasks and celery_app (optional)
+try:
+    from tasks import celery_app, scrape_topic_task, AVAILABLE_SOURCES
+    TASKS_AVAILABLE = True
+except ImportError:
+    TASKS_AVAILABLE = False
+    celery_app = None
+    scrape_topic_task = None
+    # Define fallback available sources
+    AVAILABLE_SOURCES = [
+        "youtube", "github", "reddit", "twitter", "blogs",
+        "linkedin", "facebook", "instagram", "quora", "events"
+    ]
+
 import google_api
 
 # Initialize FastAPI app
@@ -41,8 +64,56 @@ async def root():
 async def get_config():
     """
     Get API configuration and capabilities.
-    Returns available search modes, platforms, and API availability.
+    Returns available search modes, platforms, API availability, and analysis status.
     """
+    # Check content analysis availability
+    analysis_status = {
+        "available": False,
+        "status": "unknown",
+        "error": None,
+        "ollama_info": None
+    }
+
+    try:
+        from llm import check_ollama_health
+        health = check_ollama_health()
+
+        if health["healthy"]:
+            analysis_status = {
+                "available": True,
+                "status": "healthy",
+                "ollama_info": {
+                    "url": health["url"],
+                    "model": health["model"],
+                    "response_time": health["response_time"],
+                    "models_available": health.get("models_available", [])
+                }
+            }
+        else:
+            analysis_status = {
+                "available": False,
+                "status": "unhealthy",
+                "error": health["error"],
+                "ollama_info": {
+                    "url": health["url"],
+                    "model": health["model"],
+                    "models_available": health.get("models_available", [])
+                }
+            }
+
+    except ImportError as e:
+        analysis_status = {
+            "available": False,
+            "status": "not_installed",
+            "error": f"Analysis modules not available: {e}"
+        }
+    except Exception as e:
+        analysis_status = {
+            "available": False,
+            "status": "error",
+            "error": str(e)
+        }
+
     return {
         "google_api_available": google_api.is_api_available(),
         "search_modes": ["scraping", "api"],
@@ -59,7 +130,8 @@ async def get_config():
             "instagram": "Instagram accounts and posts",
             "quora": "Quora questions and answers",
             "events": "Events, workshops, and webinars"
-        }
+        },
+        "content_analysis": analysis_status
     }
 
 
@@ -266,3 +338,221 @@ async def get_history(limit: int = 10):
         ]
     finally:
         db.close()
+
+
+@app.post("/api/analyze", response_model=AnalyzeResponse)
+async def start_analysis(request: AnalyzeRequest):
+    """
+    Start deep content analysis on existing search results.
+    Returns a job_id to poll for analysis progress.
+
+    Request body:
+        topic: The original search topic (required)
+        results: The search results to analyze (required)
+    """
+    if not request.topic or len(request.topic.strip()) < 2:
+        raise HTTPException(status_code=400, detail="Topic must be at least 2 characters")
+
+    if not request.results:
+        raise HTTPException(status_code=400, detail="Results are required for analysis")
+
+    # Pre-flight check: Verify Ollama is available before starting analysis
+    try:
+        from llm import check_ollama_health
+        health = check_ollama_health()
+
+        if not health["healthy"]:
+            # Ollama not available - return detailed error
+            error_details = {
+                "error": "Content analysis not available",
+                "reason": health["error"],
+                "ollama_config": {
+                    "url": health["url"],
+                    "model": health["model"],
+                    "models_available": health.get("models_available", [])
+                },
+                "troubleshooting": []
+            }
+
+            # Add specific troubleshooting tips based on error type
+            if "Connection refused" in health["error"]:
+                error_details["troubleshooting"].extend([
+                    "Ollama server is not running",
+                    "Start Ollama with: 'ollama serve'",
+                    "Check if Ollama is installed: https://ollama.ai/"
+                ])
+            elif "not found" in health["error"] or "not available" in health["error"]:
+                error_details["troubleshooting"].extend([
+                    f"Model '{health['model']}' is not installed",
+                    f"Install model with: 'ollama pull {health['model']}'",
+                    f"Or use an available model: {', '.join(health.get('models_available', []))}"
+                ])
+            elif "timeout" in health["error"].lower():
+                error_details["troubleshooting"].extend([
+                    "Ollama server is slow to respond",
+                    "Check system resources and network connectivity",
+                    "Try restarting Ollama service"
+                ])
+
+            raise HTTPException(
+                status_code=503,  # Service Unavailable
+                detail=error_details
+            )
+
+        print(f"[API] Ollama health check passed: {health['url']} with {health['model']} ({health['response_time']}s)")
+
+    except ImportError:
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": "Content analysis system not available",
+                "reason": "Analysis modules not properly installed",
+                "troubleshooting": [
+                    "Check if content_analysis_agent.py exists",
+                    "Verify all dependencies are installed"
+                ]
+            }
+        )
+    except Exception as e:
+        print(f"[API] Unexpected error during health check: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": "Content analysis system error",
+                "reason": str(e),
+                "troubleshooting": [
+                    "Check server logs for detailed error information",
+                    "Verify Ollama installation and configuration"
+                ]
+            }
+        )
+
+    topic = request.topic.strip()
+    job_id = str(uuid.uuid4())
+
+    # Count URLs to be analyzed
+    total_urls = sum(len(items) for items in request.results.values() if isinstance(items, list))
+    print(f"[API] Starting analysis for '{topic}' with {total_urls} URLs (job: {job_id})")
+
+    # Create job in database
+    create_job(job_id, f"Analysis: {topic}")
+
+    # Try to import and run analysis task with fallback
+    try:
+        # Try Celery first
+        try:
+            from tasks import analyze_content_task
+            # Check if Celery is actually available
+            import celery
+
+            # Dispatch analysis task with validated data
+            analyze_content_task.apply_async(
+                args=[job_id, request.results, topic],
+                task_id=job_id
+            )
+            print(f"[API] Analysis dispatched to Celery queue (job: {job_id})")
+
+        except (ImportError, Exception) as celery_error:
+            print(f"[API] Celery not available ({celery_error}), running analysis synchronously...")
+
+            # Fallback: Run analysis synchronously in background thread
+            import threading
+            from tasks import analyze_urls_content
+            from database import update_job_status
+
+            def run_analysis_sync():
+                try:
+                    # Update job status to indicate start
+                    update_job_status(job_id, "progress", "Starting analysis...", 5, None)
+
+                    # Run the analysis function directly
+                    analysis_result = analyze_urls_content(
+                        results=request.results,
+                        topic=topic,
+                        job_id=job_id,
+                        max_urls=50  # Default limit
+                    )
+
+                    # Process results like the Celery task would
+                    if isinstance(analysis_result, dict) and "error" in analysis_result:
+                        # Analysis failed
+                        error_details = {
+                            "step": f"Analysis failed: {analysis_result['error']}",
+                            "progress": 0,
+                            "error": analysis_result['error']
+                        }
+
+                        if "health_check" in analysis_result:
+                            health = analysis_result["health_check"]
+                            error_details["health_info"] = {
+                                "ollama_url": health.get("url"),
+                                "ollama_model": health.get("model"),
+                                "models_available": health.get("models_available", []),
+                                "error": health.get("error")
+                            }
+
+                        final_data = {
+                            "topic": topic,
+                            "results": analysis_result.get("original_results", request.results),
+                            "total_results": sum(len(items) for items in request.results.values() if isinstance(items, list)),
+                            "content_analysis_enabled": False,
+                            "analysis_error": analysis_result["error"],
+                            "error_details": error_details
+                        }
+
+                        update_job_status(job_id, "error", final_data.get("analysis_error", "Analysis failed"), 0, final_data)
+
+                    else:
+                        # Analysis succeeded
+                        counts = {k: len(v) for k, v in analysis_result.items() if isinstance(v, list)}
+
+                        final_data = {
+                            "topic": topic,
+                            "results": analysis_result,
+                            "total_results": sum(counts.values()),
+                            "counts": counts,
+                            "content_analysis_enabled": True,
+                            "analysis_job_id": job_id,
+                            "analysis_timestamp": datetime.utcnow().isoformat()
+                        }
+
+                        # Save analyzed data to file
+                        from tasks import save_scraped_data_to_file
+                        save_scraped_data_to_file(job_id, f"{topic}_ANALYZED", final_data)
+
+                        update_job_status(job_id, "done", "Analysis complete!", 100, final_data)
+
+                except Exception as e:
+                    error_msg = str(e)
+                    print(f"[API] Sync analysis error: {error_msg}")
+
+                    error_data = {
+                        "topic": topic,
+                        "results": request.results,
+                        "total_results": sum(len(items) for items in request.results.values() if isinstance(items, list)),
+                        "error": error_msg,
+                        "content_analysis_enabled": False,
+                        "critical_error": True
+                    }
+
+                    update_job_status(job_id, "error", error_msg, 0, error_data)
+
+            # Start analysis in background thread
+            analysis_thread = threading.Thread(target=run_analysis_sync)
+            analysis_thread.daemon = True
+            analysis_thread.start()
+
+            print(f"[API] Analysis started in background thread (job: {job_id})")
+
+        return AnalyzeResponse(
+            job_id=job_id,
+            status="pending",
+            urls_to_analyze=total_urls,
+            estimated_duration_minutes=max(1, total_urls // 10)  # Rough estimate
+        )
+
+    except ImportError:
+        raise HTTPException(status_code=500, detail="Content analysis not available")
+    except Exception as e:
+        print(f"[API] Error starting analysis task: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to start analysis: {str(e)}")

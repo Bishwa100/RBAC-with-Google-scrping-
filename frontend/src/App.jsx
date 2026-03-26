@@ -11,7 +11,27 @@ export default function App() {
   const [data, setData] = useState(null)
   const [progress, setProgress] = useState({ step: '', progress: 0 })
   const [error, setError] = useState(null)
+  const [analysisStatus, setAnalysisStatus] = useState('idle') // idle, analyzing, done, error
+  const [analysisConfig, setAnalysisConfig] = useState(null) // Analysis capabilities info
+  const [detailedError, setDetailedError] = useState(null) // Enhanced error information
   const pollIntervalRef = useRef(null)
+
+  // Fetch analysis capabilities on component mount
+  useEffect(() => {
+    fetchAnalysisCapabilities()
+  }, [])
+
+  const fetchAnalysisCapabilities = async () => {
+    try {
+      const response = await fetch(`${API_URL}/api/config`)
+      if (response.ok) {
+        const config = await response.json()
+        setAnalysisConfig(config.content_analysis)
+      }
+    } catch (err) {
+      console.warn('Could not fetch analysis capabilities:', err)
+    }
+  }
 
   const clearPolling = () => {
     if (pollIntervalRef.current) {
@@ -26,7 +46,7 @@ export default function App() {
 
   const handleSearch = async (searchParams) => {
     const { topic, searchMode, sources } = searchParams
-    
+
     setStatus('loading')
     setData(null)
     setError(null)
@@ -90,6 +110,135 @@ export default function App() {
     }
   }
 
+  const handleDeepAnalysis = async () => {
+    if (!data || analysisStatus === 'analyzing') return
+
+    setAnalysisStatus('analyzing')
+    setDetailedError(null)
+    setProgress({ step: 'Starting deep analysis...', progress: 0 })
+
+    try {
+      // Call the deep analysis endpoint
+      const response = await fetch(`${API_URL}/api/analyze`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          topic: data.topic,
+          results: data.results
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+
+        // Handle detailed error responses
+        if (response.status === 503 && errorData.detail) {
+          // Service unavailable - Ollama issues
+          setDetailedError({
+            type: 'service_unavailable',
+            title: 'Content Analysis Unavailable',
+            message: errorData.detail.error || 'Analysis service is not available',
+            reason: errorData.detail.reason,
+            troubleshooting: errorData.detail.troubleshooting || [],
+            technicalDetails: errorData.detail.ollama_config
+          })
+          setAnalysisStatus('error')
+          return
+        } else {
+          // Generic error
+          throw new Error(errorData.detail?.error || errorData.detail || 'Failed to start deep analysis')
+        }
+      }
+
+      const analysisResponse = await response.json()
+      const { job_id, urls_to_analyze, estimated_duration_minutes } = analysisResponse
+
+      // Update progress with analysis info
+      setProgress({
+        step: `Starting analysis of ${urls_to_analyze} URLs...`,
+        progress: 5,
+        details: `Estimated duration: ${estimated_duration_minutes} minutes`
+      })
+
+      // Poll for analysis progress
+      const analysisInterval = setInterval(async () => {
+        try {
+          const statusRes = await fetch(`${API_URL}/api/status/${job_id}`)
+          const statusData = await statusRes.json()
+
+          if (statusData.status === 'progress') {
+            const progressData = {
+              step: statusData.step || 'Analyzing content...',
+              progress: statusData.progress || 0,
+            }
+
+            // Add details if available
+            if (statusData.details) {
+              progressData.details = statusData.details
+            }
+
+            setProgress(progressData)
+          } else if (statusData.status === 'done') {
+            clearInterval(analysisInterval)
+
+            // Check if analysis actually succeeded
+            if (statusData.content_analysis_enabled) {
+              setData({
+                ...data,
+                results: statusData.results,
+                content_analysis_enabled: true
+              })
+              setAnalysisStatus('done')
+              setProgress({ step: 'Analysis complete!', progress: 100 })
+            } else {
+              // Analysis completed but failed
+              setDetailedError({
+                type: 'analysis_failed',
+                title: 'Analysis Incomplete',
+                message: statusData.analysis_error || 'Analysis completed but no insights were generated',
+                reason: statusData.error_details?.error || 'Unknown error during processing',
+                troubleshooting: statusData.error_details?.troubleshooting || [
+                  'Try running the analysis again',
+                  'Check if Ollama is running properly'
+                ]
+              })
+              setAnalysisStatus('error')
+            }
+          } else if (statusData.status === 'error') {
+            clearInterval(analysisInterval)
+
+            setDetailedError({
+              type: 'processing_error',
+              title: 'Analysis Failed',
+              message: statusData.error || 'An error occurred during analysis',
+              troubleshooting: [
+                'Try running the analysis again',
+                'Check your internet connection',
+                'Verify that Ollama is running'
+              ]
+            })
+            setAnalysisStatus('error')
+          }
+        } catch (err) {
+          console.error('Analysis polling error:', err)
+        }
+      }, 2000) // Poll every 2 seconds for analysis
+
+    } catch (err) {
+      setDetailedError({
+        type: 'network_error',
+        title: 'Connection Error',
+        message: err.message,
+        troubleshooting: [
+          'Check your internet connection',
+          'Verify the server is running',
+          'Try refreshing the page'
+        ]
+      })
+      setAnalysisStatus('error')
+    }
+  }
+
   return (
     <div className="app-container">
       <header className="app-header">
@@ -116,7 +265,10 @@ export default function App() {
           <button
             className="search-button"
             style={{ marginTop: '16px' }}
-            onClick={() => setStatus('idle')}
+            onClick={() => {
+              setStatus('idle')
+              setError(null)
+            }}
           >
             Try Again
           </button>
@@ -130,6 +282,136 @@ export default function App() {
             topic={data.topic}
             total={data.total_results}
           />
+
+          {/* Deep Analysis Section */}
+          <div className="deep-analysis-section">
+            {/* Analysis Status Indicator */}
+            {analysisConfig && (
+              <div className={`analysis-status ${analysisConfig.available ? 'available' : 'unavailable'}`}>
+                <span className="status-indicator">
+                  {analysisConfig.available ? '🟢' : '🔴'}
+                </span>
+                <span className="status-text">
+                  AI Analysis: {analysisConfig.available ? 'Available' : 'Unavailable'}
+                  {analysisConfig.ollama_info?.model && ` (${analysisConfig.ollama_info.model})`}
+                </span>
+              </div>
+            )}
+
+            {/* Analysis Error Display */}
+            {detailedError && (
+              <div className="detailed-error-container">
+                <div className="error-header">
+                  <span className="error-icon">⚠️</span>
+                  <h3>{detailedError.title}</h3>
+                </div>
+
+                <div className="error-content">
+                  <p className="error-message">{detailedError.message}</p>
+
+                  {detailedError.reason && (
+                    <div className="error-reason">
+                      <strong>Reason:</strong> {detailedError.reason}
+                    </div>
+                  )}
+
+                  {detailedError.troubleshooting?.length > 0 && (
+                    <div className="troubleshooting-section">
+                      <strong>How to fix:</strong>
+                      <ul>
+                        {detailedError.troubleshooting.map((tip, index) => (
+                          <li key={index}>{tip}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {detailedError.technicalDetails && (
+                    <details className="technical-details">
+                      <summary>Technical Details</summary>
+                      <div className="tech-info">
+                        <p><strong>Ollama URL:</strong> {detailedError.technicalDetails.url}</p>
+                        <p><strong>Target Model:</strong> {detailedError.technicalDetails.model}</p>
+                        {detailedError.technicalDetails.models_available?.length > 0 && (
+                          <p><strong>Available Models:</strong> {detailedError.technicalDetails.models_available.join(', ')}</p>
+                        )}
+                      </div>
+                    </details>
+                  )}
+                </div>
+
+                <div className="error-actions">
+                  <button
+                    className="retry-button"
+                    onClick={() => {
+                      setDetailedError(null)
+                      setAnalysisStatus('idle')
+                      fetchAnalysisCapabilities() // Refresh capabilities
+                    }}
+                  >
+                    Refresh Status
+                  </button>
+
+                  {detailedError.type !== 'service_unavailable' && (
+                    <button
+                      className="retry-analysis-button"
+                      onClick={() => {
+                        setDetailedError(null)
+                        handleDeepAnalysis()
+                      }}
+                    >
+                      Retry Analysis
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Analysis Prompt - only show if analysis available and no errors */}
+            {!data.content_analysis_enabled &&
+             analysisStatus !== 'done' &&
+             analysisStatus !== 'analyzing' &&
+             !detailedError &&
+             analysisConfig?.available && (
+              <div className="analysis-prompt">
+                <div className="analysis-info">
+                  <span className="analysis-icon">🧠</span>
+                  <div>
+                    <h3>Want deeper insights?</h3>
+                    <p>AI can visit each webpage, extract full content, and provide detailed analysis including relevance scores, quality ratings, and actionable insights.</p>
+                  </div>
+                </div>
+                <button
+                  className="deep-analysis-button"
+                  onClick={handleDeepAnalysis}
+                  disabled={analysisStatus === 'analyzing'}
+                >
+                  Start Deep Analysis
+                </button>
+              </div>
+            )}
+
+            {/* Analysis Progress */}
+            {analysisStatus === 'analyzing' && (
+              <div className="analysis-progress">
+                <LoadingState
+                  step={progress.step}
+                  progress={progress.progress}
+                  details={progress.details}
+                />
+                <p className="analysis-note">⏱️ This usually takes 2-5 minutes depending on the number of URLs</p>
+              </div>
+            )}
+
+            {/* Analysis Complete */}
+            {data.content_analysis_enabled && (
+              <div className="analysis-complete">
+                <span className="analysis-complete-icon">✅</span>
+                <span>Deep analysis complete! Results now include AI insights for each webpage.</span>
+              </div>
+            )}
+          </div>
+
           <ResultTabs results={data.results} />
         </>
       )}

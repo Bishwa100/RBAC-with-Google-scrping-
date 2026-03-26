@@ -19,7 +19,7 @@ services:
     environment:
       - REDIS_URL=redis://redis:6379/0
       - OLLAMA_URL=http://host.docker.internal:11434
-      - OLLAMA_MODEL=sorc/qwen3.5-claude-4.6-opus
+      - OLLAMA_MODEL=llama3.2:latest
       - DATABASE_URL=sqlite:///./topicLens.db
       - SERPSHOT_API_KEY=5bff7fc157df396b31466b9f0951a485
       - DISPLAY=:99
@@ -34,7 +34,7 @@ services:
     environment:
       - REDIS_URL=redis://redis:6379/0
       - OLLAMA_URL=http://host.docker.internal:11434
-      - OLLAMA_MODEL=sorc/qwen3.5-claude-4.6-opus
+      - OLLAMA_MODEL=llama3.2:latest
       - DATABASE_URL=sqlite:///./topicLens.db
       - SERPSHOT_API_KEY=5bff7fc157df396b31466b9f0951a485
       - DISPLAY=:99

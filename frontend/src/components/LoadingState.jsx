@@ -1,8 +1,11 @@
-export default function LoadingState({ step, progress }) {
+export default function LoadingState({ step, progress, details }) {
   return (
     <div className="loading-container">
       <div className="loading-spinner"></div>
       <p className="loading-step">{step || 'Starting search...'}</p>
+      {details && (
+        <p className="loading-details">{details}</p>
+      )}
       <div className="progress-bar">
         <div
           className="progress-fill"

@@ -83,3 +83,24 @@ def create_job(job_id: str, topic: str):
         db.commit()
     finally:
         db.close()
+
+
+def update_job_status(job_id: str, status: str, step: str = None, progress: int = None, results: dict = None):
+    """Update job status with progress information and results."""
+    db = SessionLocal()
+    try:
+        job = db.query(SearchJob).filter(SearchJob.id == job_id).first()
+        if job:
+            job.status = status
+
+            # Update results if provided
+            if results is not None:
+                job.results = json.dumps(results)
+
+            # Mark as completed if done
+            if status in ["done", "completed"]:
+                job.completed_at = datetime.utcnow()
+
+        db.commit()
+    finally:
+        db.close()

@@ -1,5 +1,13 @@
 from celery import Celery
 import os
+import sys
+import json
+from datetime import datetime
+
+# Add project root to path for proper imports in Celery context
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
 
 from scrapers.youtube_scraper import scrape_youtube
 from scrapers.universal_search_scraper import scrape_blogs, scrape_linkedin, scrape_facebook, scrape_instagram
@@ -9,12 +17,328 @@ from scrapers.github_scraper import scrape_github_repos
 from scrapers.twitter_scraper import scrape_twitter
 from scrapers.quora_scraper import scrape_quora
 from scrapers.blog_scraper import scrape_blog_articles
-from llm import generate_search_queries, generate_deep_insights, rank_content
+from llm import generate_search_queries, generate_deep_insights, rank_content, check_ollama_health
 from database import save_results
 import google_api
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
 celery_app = Celery("tasks", broker=REDIS_URL, backend=REDIS_URL)
+
+# Directory to store scraped data
+SCRAPED_DATA_DIR = os.path.join(os.path.dirname(__file__), "scraped_data")
+os.makedirs(SCRAPED_DATA_DIR, exist_ok=True)
+
+
+def save_scraped_data_to_file(job_id: str, topic: str, data: dict):
+    """
+    Save scraped data to a JSON file for inspection.
+
+    Args:
+        job_id: Unique job identifier
+        topic: The search topic
+        data: The complete scraped data
+    """
+    try:
+        # Create filename with timestamp
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        # Clean topic for filename
+        clean_topic = "".join(c if c.isalnum() or c in (' ', '-', '_') else '_' for c in topic)
+        clean_topic = clean_topic.replace(' ', '_')[:50]  # Limit length
+
+        filename = f"{clean_topic}_{timestamp}_{job_id[:8]}.json"
+        filepath = os.path.join(SCRAPED_DATA_DIR, filename)
+
+        # Save data to file
+        with open(filepath, 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+
+        print(f"[Data Saved] Scraped data saved to: {filepath}")
+        return filepath
+    except Exception as e:
+        print(f"[File Save Error] Could not save scraped data: {e}")
+        return None
+
+
+def save_individual_scraper_results(source: str, data: list, job_id: str):
+    """
+    Save individual scraper results to a separate file.
+
+    Args:
+        source: The source/platform name (e.g., 'youtube', 'reddit')
+        data: The scraped data from that source
+        job_id: Unique job identifier
+    """
+    try:
+        if not data:
+            return None
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"{source}_{timestamp}_{job_id[:8]}.json"
+        filepath = os.path.join(SCRAPED_DATA_DIR, filename)
+
+        save_data = {
+            "source": source,
+            "timestamp": timestamp,
+            "count": len(data),
+            "data": data
+        }
+
+        with open(filepath, 'w', encoding='utf-8') as f:
+            json.dump(save_data, f, indent=2, ensure_ascii=False)
+
+        print(f"[Individual Save] {source} data saved to: {filepath}")
+        return filepath
+    except Exception as e:
+        print(f"[Individual Save Error] Could not save {source} data: {e}")
+        return None
+
+
+def analyze_urls_content(results: dict, topic: str, job_id: str, max_urls: int = 50) -> dict:
+    """
+    Analyze URLs content using the Content Analysis Agent.
+
+    Args:
+        results: Ranked results from scraping
+        topic: Search topic
+        job_id: Unique job identifier
+        max_urls: Maximum URLs to analyze
+
+    Returns:
+        Enriched results with analyzed content or error info
+    """
+    print(f"[Content Analysis] Starting analysis for job {job_id}")
+
+    # Check Ollama health before starting analysis
+    try:
+        health = check_ollama_health()
+        if not health["healthy"]:
+            error_msg = f"Ollama not available: {health['error']}"
+            print(f"[Content Analysis Error] {error_msg}")
+            return {
+                "error": error_msg,
+                "health_check": health,
+                "original_results": results
+            }
+        else:
+            print(f"[Content Analysis] Ollama healthy: {health['url']} with {health['model']} ({health['response_time']}s)")
+    except Exception as e:
+        error_msg = f"Ollama health check failed: {e}"
+        print(f"[Content Analysis Error] {error_msg}")
+        return {
+            "error": error_msg,
+            "original_results": results
+        }
+
+    try:
+        # Import content analysis agent with proper path
+        try:
+            from content_analysis_agent import ContentAnalysisAgent
+        except ImportError as e:
+            # Try alternative import path
+            sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+            from content_analysis_agent import ContentAnalysisAgent
+
+        print(f"[Content Analysis] ContentAnalysisAgent imported successfully")
+
+        # Create temporary data file for the agent to process
+        temp_data = {
+            "topic": topic,
+            "results": results,
+            "total_results": sum(len(items) for items in results.values() if isinstance(items, list))
+        }
+
+        # Create temporary file
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        temp_filename = f"temp_analysis_{job_id}_{timestamp}.json"
+        temp_filepath = os.path.join(SCRAPED_DATA_DIR, temp_filename)
+
+        with open(temp_filepath, 'w', encoding='utf-8') as f:
+            json.dump(temp_data, f, indent=2, ensure_ascii=False)
+
+        print(f"[Content Analysis] Created temporary file: {temp_filepath}")
+
+        # Initialize agent and run analysis using proper method
+        agent = ContentAnalysisAgent()
+        enriched_data = agent.analyze_scraped_data(temp_filepath, max_urls=max_urls)
+
+        # Clean up temporary file
+        try:
+            os.remove(temp_filepath)
+            print(f"[Content Analysis] Cleaned up temporary file")
+        except Exception as cleanup_error:
+            print(f"[Content Analysis] Warning: Could not clean up temp file: {cleanup_error}")
+
+        if enriched_data is None:
+            raise Exception("Content analysis agent returned None")
+
+        print(f"[Content Analysis] Analysis completed successfully for {job_id}")
+        return enriched_data.get("results", results)
+
+    except ImportError as e:
+        error_msg = f"Could not import content analysis agent: {e}"
+        print(f"[Content Analysis Error] {error_msg}")
+        print(f"[Content Analysis Error] Python path: {sys.path}")
+        return {
+            "error": error_msg,
+            "import_error": True,
+            "original_results": results
+        }
+    except Exception as e:
+        error_msg = f"Content analysis failed: {e}"
+        print(f"[Content Analysis Error] {error_msg}")
+        import traceback
+        print(f"[Content Analysis Error] Traceback: {traceback.format_exc()}")
+        return {
+            "error": error_msg,
+            "original_results": results
+        }
+
+
+@celery_app.task(bind=True, name="analyze_content")
+def analyze_content_task(self, job_id: str, results: dict, topic: str, max_urls: int = 50):
+    """
+    Separate task to analyze content from existing search results.
+
+    Args:
+        job_id: Search job ID
+        results: Existing search results
+        topic: Search topic
+        max_urls: Maximum URLs to analyze (default: 50)
+    """
+    try:
+        # Update task state with startup info
+        self.update_state(
+            state="PROGRESS",
+            meta={
+                "step": "Initializing content analysis...",
+                "progress": 5,
+                "details": f"Preparing to analyze up to {max_urls} URLs"
+            }
+        )
+
+        print(f"[Content Analysis Task] Starting analysis for job {job_id}")
+        print(f"[Content Analysis Task] Topic: {topic}")
+        print(f"[Content Analysis Task] Max URLs: {max_urls}")
+
+        # Check total URLs available
+        total_urls = sum(len(items) for items in results.values() if isinstance(items, list))
+        print(f"[Content Analysis Task] Total URLs available: {total_urls}")
+
+        self.update_state(
+            state="PROGRESS",
+            meta={
+                "step": f"Found {total_urls} URLs to analyze...",
+                "progress": 10,
+                "details": "Running health checks and starting analysis"
+            }
+        )
+
+        # Run content analysis with improved error handling
+        analysis_result = analyze_urls_content(
+            results,
+            topic,
+            job_id,
+            max_urls=max_urls
+        )
+
+        # Check if analysis returned an error
+        if isinstance(analysis_result, dict) and "error" in analysis_result:
+            print(f"[Content Analysis Task Error] {analysis_result['error']}")
+
+            # Update task state with specific error
+            error_details = {
+                "step": f"Analysis failed: {analysis_result['error']}",
+                "progress": 0,
+                "error": analysis_result['error']
+            }
+
+            # Add specific error context
+            if "health_check" in analysis_result:
+                health = analysis_result["health_check"]
+                error_details["health_info"] = {
+                    "ollama_url": health.get("url"),
+                    "ollama_model": health.get("model"),
+                    "models_available": health.get("models_available", []),
+                    "error": health.get("error")
+                }
+
+            if analysis_result.get("import_error"):
+                error_details["import_error"] = True
+                error_details["troubleshooting"] = [
+                    "Content analysis agent could not be imported",
+                    "Check if content_analysis_agent.py exists in project root",
+                    "Verify Python path configuration"
+                ]
+
+            self.update_state(state="PROGRESS", meta=error_details)
+
+            # Return original results with error info
+            return {
+                "topic": topic,
+                "results": analysis_result.get("original_results", results),
+                "total_results": sum(len(items) for items in results.values() if isinstance(items, list)),
+                "content_analysis_enabled": False,
+                "analysis_error": analysis_result["error"],
+                "error_details": error_details
+            }
+
+        self.update_state(
+            state="PROGRESS",
+            meta={
+                "step": "Analysis complete, saving results...",
+                "progress": 95,
+                "details": "Finalizing and saving analyzed data"
+            }
+        )
+
+        # Create final data structure with successful analysis
+        counts = {k: len(v) for k, v in analysis_result.items() if isinstance(v, list)}
+
+        final_data = {
+            "topic": topic,
+            "results": analysis_result,
+            "total_results": sum(counts.values()),
+            "counts": counts,
+            "content_analysis_enabled": True,
+            "analysis_job_id": job_id,
+            "analysis_timestamp": datetime.utcnow().isoformat()
+        }
+
+        # Save analyzed data to file
+        save_scraped_data_to_file(job_id, f"{topic}_ANALYZED", final_data)
+
+        print(f"[Content Analysis Task] Successfully completed analysis for {job_id}")
+        return final_data
+
+    except Exception as e:
+        error_msg = str(e)
+        print(f"[Content Analysis Task Error] Unexpected error: {error_msg}")
+
+        # Import traceback for detailed error info
+        import traceback
+        traceback_str = traceback.format_exc()
+        print(f"[Content Analysis Task Error] Traceback: {traceback_str}")
+
+        # Update task state with error
+        self.update_state(
+            state="PROGRESS",
+            meta={
+                "step": f"Critical error: {error_msg}",
+                "progress": 0,
+                "error": error_msg,
+                "traceback": traceback_str[:1000]  # Limit traceback length
+            }
+        )
+
+        # Return error data with original results
+        return {
+            "topic": topic,
+            "results": results,  # Return original results
+            "total_results": sum(len(items) for items in results.values() if isinstance(items, list)),
+            "error": error_msg,
+            "content_analysis_enabled": False,
+            "critical_error": True
+        }
 
 # Available platforms for searching
 AVAILABLE_SOURCES = [
@@ -180,6 +504,9 @@ def scrape_topic_task(self, topic: str, job_id: str, search_mode: str = "scrapin
             "sources_searched": sources
         }
 
+        # Save to JSON file for inspection
+        save_scraped_data_to_file(job_id, topic, final_data)
+
         # Save to database
         save_results(job_id, topic, final_data)
 
@@ -199,5 +526,7 @@ def scrape_topic_task(self, topic: str, job_id: str, search_mode: str = "scrapin
             "total_results": 0,
             "error": str(e)
         }
+        # Save error data to file
+        save_scraped_data_to_file(job_id, topic, error_data)
         save_results(job_id, topic, error_data)
         return error_data

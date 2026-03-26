@@ -93,3 +93,4 @@ frontend/build/
 *.tmp
 *.temp
 .cache/
+scraped_data/

@@ -685,3 +685,465 @@ body {
     gap: 8px;
   }
 }
+
+/* ========================================
+   DEEP ANALYSIS SECTION STYLES
+   ======================================== */
+
+.analysis-option {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  padding: 16px;
+  background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+  border: 2px solid #cbd5e0;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.analysis-option:hover {
+  border-color: #6366f1;
+  background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.15);
+}
+
+.analysis-option.enabled {
+  border-color: #6366f1;
+  background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.2);
+}
+
+.analysis-option input[type="checkbox"] {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.analysis-content {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  width: 100%;
+}
+
+.analysis-icon {
+  font-size: 24px;
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.analysis-option div div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.analysis-option strong {
+  font-size: 16px;
+  font-weight: 600;
+  color: #2d3748;
+  display: block;
+}
+
+.analysis-option small {
+  font-size: 13px;
+  color: #4a5568;
+  display: block;
+  line-height: 1.4;
+}
+
+.analysis-warning {
+  color: #d69e2e !important;
+  font-weight: 500 !important;
+  margin-top: 4px;
+  padding: 8px 12px;
+  background: rgba(237, 137, 54, 0.1);
+  border-radius: 6px;
+  border-left: 3px solid #ed8936;
+}
+
+/* Add visual checkbox indicator */
+.analysis-option::before {
+  content: '';
+  position: absolute;
+  top: 18px;
+  right: 16px;
+  width: 20px;
+  height: 20px;
+  border: 2px solid #cbd5e0;
+  border-radius: 4px;
+  background: white;
+  transition: all 0.3s ease;
+}
+
+.analysis-option.enabled::before {
+  background: #6366f1;
+  border-color: #6366f1;
+}
+
+.analysis-option.enabled::after {
+  content: '✓';
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  color: white;
+  font-size: 14px;
+  font-weight: bold;
+}
+
+/* ========================================
+   DEEP ANALYSIS RESULTS SECTION STYLES
+   ======================================== */
+
+.deep-analysis-section {
+  margin: 32px 0;
+  padding: 0;
+}
+
+.analysis-prompt {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 24px;
+  background: linear-gradient(135deg, #f8faff 0%, #e6f0ff 100%);
+  border: 2px solid #6366f1;
+  border-radius: 16px;
+  box-shadow: 0 4px 16px rgba(99, 102, 241, 0.15);
+}
+
+.analysis-info {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  flex: 1;
+}
+
+.analysis-info .analysis-icon {
+  font-size: 32px;
+  margin-top: 4px;
+  flex-shrink: 0;
+}
+
+.analysis-info h3 {
+  margin: 0 0 8px 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: #2d3748;
+}
+
+.analysis-info p {
+  margin: 0;
+  font-size: 14px;
+  color: #4a5568;
+  line-height: 1.5;
+  max-width: 500px;
+}
+
+.deep-analysis-button {
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  color: white;
+  border: none;
+  border-radius: 12px;
+  padding: 16px 32px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.deep-analysis-button:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(99, 102, 241, 0.4);
+}
+
+.deep-analysis-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.analysis-progress {
+  padding: 24px;
+  background: rgba(99, 102, 241, 0.05);
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  border-radius: 16px;
+  text-align: center;
+}
+
+.analysis-note {
+  margin: 16px 0 0 0;
+  font-size: 14px;
+  color: #6b7280;
+  font-style: italic;
+}
+
+.analysis-complete {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 20px;
+  background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+  border: 1px solid #22c55e;
+  border-radius: 12px;
+  color: #15803d;
+  font-weight: 500;
+}
+
+.analysis-complete-icon {
+  font-size: 20px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .analysis-prompt {
+    flex-direction: column;
+    align-items: flex-start;
+    text-align: left;
+  }
+
+  .deep-analysis-button {
+    width: 100%;
+    padding: 14px 24px;
+  }
+
+  .analysis-info .analysis-icon {
+    font-size: 28px;
+  }
+
+  .analysis-info h3 {
+    font-size: 18px;
+  }
+}
+
+/* Analysis Status Indicator */
+.analysis-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  margin-bottom: 20px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.analysis-status.available {
+  background: rgba(34, 197, 94, 0.1);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  color: #22c55e;
+}
+
+.analysis-status.unavailable {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #ef4444;
+}
+
+.status-indicator {
+  font-size: 12px;
+}
+
+.status-text {
+  font-weight: 500;
+}
+
+/* Detailed Error Container */
+.detailed-error-container {
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: 16px;
+  padding: 24px;
+  margin-bottom: 20px;
+  color: #fca5a5;
+}
+
+.error-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.error-icon {
+  font-size: 24px;
+}
+
+.error-header h3 {
+  margin: 0;
+  color: #fca5a5;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.error-content {
+  margin-bottom: 20px;
+}
+
+.error-message {
+  font-size: 16px;
+  line-height: 1.5;
+  margin-bottom: 12px;
+  color: #fed7d7;
+}
+
+.error-reason {
+  margin-bottom: 16px;
+  padding: 12px;
+  background: rgba(239, 68, 68, 0.1);
+  border-radius: 8px;
+  color: #fed7d7;
+}
+
+.troubleshooting-section {
+  margin-bottom: 16px;
+}
+
+.troubleshooting-section strong {
+  color: #fca5a5;
+  display: block;
+  margin-bottom: 8px;
+}
+
+.troubleshooting-section ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.troubleshooting-section li {
+  padding: 8px 0;
+  padding-left: 20px;
+  position: relative;
+  color: #fed7d7;
+}
+
+.troubleshooting-section li:before {
+  content: "→";
+  position: absolute;
+  left: 0;
+  color: #fca5a5;
+  font-weight: bold;
+}
+
+.technical-details {
+  margin-top: 16px;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.technical-details summary {
+  padding: 12px 16px;
+  background: rgba(239, 68, 68, 0.1);
+  cursor: pointer;
+  font-weight: 500;
+  color: #fca5a5;
+  border-bottom: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.technical-details summary:hover {
+  background: rgba(239, 68, 68, 0.15);
+}
+
+.tech-info {
+  padding: 16px;
+}
+
+.tech-info p {
+  margin: 8px 0;
+  color: #fed7d7;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 13px;
+}
+
+.tech-info strong {
+  color: #fca5a5;
+}
+
+/* Error Action Buttons */
+.error-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.retry-button, .retry-analysis-button {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 8px;
+  font-weight: 500;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.retry-button {
+  background: rgba(99, 102, 241, 0.1);
+  color: #818cf8;
+  border: 1px solid rgba(99, 102, 241, 0.3);
+}
+
+.retry-button:hover {
+  background: rgba(99, 102, 241, 0.2);
+  transform: translateY(-1px);
+}
+
+.retry-analysis-button {
+  background: rgba(34, 197, 94, 0.1);
+  color: #4ade80;
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.retry-analysis-button:hover {
+  background: rgba(34, 197, 94, 0.2);
+  transform: translateY(-1px);
+}
+
+/* Enhanced Progress Display */
+.analysis-progress .loading-step {
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+
+.analysis-progress .loading-details {
+  font-size: 14px;
+  color: #a0a0b8;
+  font-style: italic;
+  margin-bottom: 12px;
+}
+
+/* Mobile Responsiveness for Error Components */
+@media (max-width: 768px) {
+  .detailed-error-container {
+    padding: 20px;
+  }
+
+  .error-header h3 {
+    font-size: 16px;
+  }
+
+  .error-actions {
+    flex-direction: column;
+  }
+
+  .retry-button, .retry-analysis-button {
+    width: 100%;
+    padding: 12px 20px;
+  }
+
+  .technical-details {
+    font-size: 13px;
+  }
+
+  .analysis-status {
+    padding: 10px 14px;
+    font-size: 13px;
+  }
+}

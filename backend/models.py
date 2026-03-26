@@ -14,6 +14,18 @@ class SearchResponse(BaseModel):
     status: str
 
 
+class AnalyzeRequest(BaseModel):
+    topic: str
+    results: Dict[str, Any]  # The results to analyze
+
+
+class AnalyzeResponse(BaseModel):
+    job_id: str
+    status: str
+    urls_to_analyze: Optional[int] = None
+    estimated_duration_minutes: Optional[int] = None
+
+
 class InsightsModel(BaseModel):
     summary: str
     trends: List[str]

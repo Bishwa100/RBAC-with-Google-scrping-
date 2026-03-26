@@ -2,28 +2,212 @@ import httpx
 import json
 import os
 import re
+import time
+from typing import Dict, Optional
 
-OLLAMA_URL = os.getenv("OLLAMA_URL", "http://host.docker.internal:11434")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "sorc/qwen3.5-claude-4.6-opus")
+# Updated default configuration based on diagnostic results
+OLLAMA_URL = os.getenv("OLLAMA_URL", "http://127.0.0.1:11434")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2:latest")
+
+# Fallback URLs to try if primary fails
+FALLBACK_URLS = [
+    "http://127.0.0.1:11434",
+    "http://localhost:11434",
+    "http://host.docker.internal:11434"
+]
 
 
-def call_ollama(prompt: str, temperature: float = 0.3) -> str:
-    """Call the local Ollama instance."""
+def check_ollama_health(url: str = None, model: str = None) -> Dict:
+    """
+    Check if Ollama server is accessible and model is available.
+
+    Returns:
+        {
+            "healthy": bool,
+            "url": str,
+            "model": str,
+            "models_available": list,
+            "error": str or None,
+            "response_time": float
+        }
+    """
+    url = url or OLLAMA_URL
+    model = model or OLLAMA_MODEL
+
+    result = {
+        "healthy": False,
+        "url": url,
+        "model": model,
+        "models_available": [],
+        "error": None,
+        "response_time": None
+    }
+
     try:
-        resp = httpx.post(
-            f"{OLLAMA_URL}/api/generate",
-            json={
-                "model": OLLAMA_MODEL,
-                "prompt": prompt,
-                "stream": False,
-                "options": {"temperature": temperature, "num_ctx": 4096}
-            },
-            timeout=120.0
-        )
-        return resp.json().get("response", "").strip()
+        start_time = time.time()
+
+        # Check server availability
+        response = httpx.get(f"{url}/api/tags", timeout=10.0)
+        result["response_time"] = round(time.time() - start_time, 2)
+
+        if response.status_code == 200:
+            data = response.json()
+            models = data.get("models", [])
+            result["models_available"] = [m.get("name", "") for m in models]
+
+            # Check if target model is available
+            if model in result["models_available"]:
+                # Test model with simple generation
+                test_result = httpx.post(
+                    f"{url}/api/generate",
+                    json={
+                        "model": model,
+                        "prompt": "Reply: OK",
+                        "stream": False,
+                        "options": {"temperature": 0.1, "num_ctx": 512}
+                    },
+                    timeout=30.0
+                )
+
+                if test_result.status_code == 200:
+                    result["healthy"] = True
+                else:
+                    result["error"] = f"Model test failed with status {test_result.status_code}"
+            else:
+                result["error"] = f"Model '{model}' not available. Available: {', '.join(result['models_available'])}"
+        else:
+            result["error"] = f"Server returned status {response.status_code}"
+
+    except httpx.ConnectError:
+        result["error"] = "Connection refused - Ollama server not running"
+    except httpx.TimeoutException:
+        result["error"] = "Connection timeout"
     except Exception as e:
-        print(f"[Ollama Error] {e}")
-        return ""
+        result["error"] = str(e)
+
+    return result
+
+
+def find_working_ollama_config() -> Optional[Dict]:
+    """
+    Find a working Ollama configuration by trying multiple URLs and models.
+
+    Returns:
+        {
+            "url": str,
+            "model": str,
+            "response_time": float
+        } or None if no working config found
+    """
+    # Try primary config first
+    health = check_ollama_health()
+    if health["healthy"]:
+        return {
+            "url": health["url"],
+            "model": health["model"],
+            "response_time": health["response_time"]
+        }
+
+    print(f"[Ollama] Primary config failed: {health['error']}")
+
+    # Try fallback URLs
+    for url in FALLBACK_URLS:
+        if url == OLLAMA_URL:
+            continue  # Already tried
+
+        print(f"[Ollama] Trying fallback URL: {url}")
+        health = check_ollama_health(url=url)
+
+        if health["healthy"]:
+            print(f"[Ollama] Found working config: {url} with {health['model']}")
+            return {
+                "url": url,
+                "model": health["model"],
+                "response_time": health["response_time"]
+            }
+
+        # If primary model not available, try common models
+        if health["models_available"]:
+            common_models = ["llama3.2:latest", "llama3.1:latest", "llama3:latest", "qwen2.5:0.5b"]
+            for model in common_models:
+                if model in health["models_available"]:
+                    print(f"[Ollama] Trying model: {model}")
+                    health = check_ollama_health(url=url, model=model)
+                    if health["healthy"]:
+                        print(f"[Ollama] Found working config: {url} with {model}")
+                        return {
+                            "url": url,
+                            "model": model,
+                            "response_time": health["response_time"]
+                        }
+
+    return None
+
+
+def call_ollama(prompt: str, temperature: float = 0.3, max_retries: int = 2) -> str:
+    """
+    Call the local Ollama instance with retry logic and better error handling.
+
+    Args:
+        prompt: The prompt to send to Ollama
+        temperature: Generation temperature (0.0 to 1.0)
+        max_retries: Maximum number of retry attempts
+
+    Returns:
+        Generated text response or empty string on failure
+    """
+    last_error = None
+
+    for attempt in range(max_retries + 1):
+        try:
+            # Find working config if this is a retry
+            if attempt > 0:
+                working_config = find_working_ollama_config()
+                if working_config:
+                    url = working_config["url"]
+                    model = working_config["model"]
+                    print(f"[Ollama] Retry {attempt}: Using {url} with {model}")
+                else:
+                    print(f"[Ollama] Retry {attempt}: No working config found")
+                    break
+            else:
+                url = OLLAMA_URL
+                model = OLLAMA_MODEL
+
+            resp = httpx.post(
+                f"{url}/api/generate",
+                json={
+                    "model": model,
+                    "prompt": prompt,
+                    "stream": False,
+                    "options": {"temperature": temperature, "num_ctx": 4096}
+                },
+                timeout=120.0
+            )
+
+            if resp.status_code == 200:
+                response_text = resp.json().get("response", "").strip()
+                if attempt > 0:
+                    print(f"[Ollama] Retry {attempt} successful!")
+                return response_text
+            else:
+                last_error = f"HTTP {resp.status_code}: {resp.text}"
+
+        except httpx.ConnectError as e:
+            last_error = f"Connection failed: {e}"
+        except httpx.TimeoutException:
+            last_error = "Request timeout"
+        except Exception as e:
+            last_error = f"Unexpected error: {e}"
+
+        if attempt < max_retries:
+            wait_time = 2 ** attempt  # Exponential backoff
+            print(f"[Ollama] Attempt {attempt + 1} failed: {last_error}")
+            print(f"[Ollama] Retrying in {wait_time}s...")
+            time.sleep(wait_time)
+
+    print(f"[Ollama Error] All attempts failed. Last error: {last_error}")
+    return ""
 
 
 def generate_search_queries(topic: str) -> dict:
