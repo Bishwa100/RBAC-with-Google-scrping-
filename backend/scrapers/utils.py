@@ -101,39 +101,71 @@ def check_and_solve_captcha(driver):
             print("No CAPTCHA iframe found.")
             return False
 
-        time.sleep(1)
+        time.sleep(2)  # Wait for iframe to fully load
 
         try:
             checkbox = driver.ele('@class=recaptcha-checkbox-border', timeout=5)
             if checkbox:
                 checkbox.click()
                 print("Clicked reCAPTCHA checkbox.")
+            else:
+                print("Checkbox not found")
+                return False
         except Exception as e:
             print(f"Could not click checkbox: {e}")
+            return False
 
-        time.sleep(3)
+        time.sleep(4)  # Increased wait for challenge to appear
 
         try:
-            audio_btn = driver.ele('@id=recaptcha-audio-button', timeout=5)
+            audio_btn = driver.ele('@id=recaptcha-audio-button', timeout=10)
             if audio_btn:
                 audio_btn.click()
                 print("Clicked audio challenge button.")
+            else:
+                print("Audio button not found - CAPTCHA might require image verification")
+                return False
         except Exception as e:
             print(f"Could not click audio button: {e}")
+            return False
 
-        time.sleep(2)
+        # CRITICAL: Wait longer for audio to load
+        print("Waiting for audio challenge to load...")
+        time.sleep(5)  # Increased wait for audio to fully load
 
         try:
-            audio_source = driver.ele('@id=audio-source').link
+            # Try multiple times to get the audio source
+            audio_source = None
+            for attempt in range(3):
+                try:
+                    audio_elem = driver.ele('@id=audio-source', timeout=5)
+                    if audio_elem:
+                        audio_source = audio_elem.link
+                        if audio_source:
+                            print(f"Successfully retrieved audio source on attempt {attempt + 1}")
+                            break
+                    print(f"Attempt {attempt + 1}: Audio source not ready, waiting...")
+                    time.sleep(3)
+                except Exception as e:
+                    print(f"Attempt {attempt + 1} failed: {e}")
+                    if attempt < 2:
+                        time.sleep(3)
+
+            if not audio_source:
+                print("Could not retrieve audio source after 3 attempts")
+                return False
+
             print(f"Audio link: {audio_source}")
 
             audio_file = os.path.join(os.getcwd(), 'captcha.mp3')
             wav_file = os.path.join(os.getcwd(), 'captcha.wav')
 
             urllib.request.urlretrieve(audio_source, audio_file)
+            print("Downloaded audio file")
 
             sound = pydub.AudioSegment.from_mp3(audio_file)
             sound.export(wav_file, format="wav")
+            print("Converted to WAV format")
 
             r = sr.Recognizer()
             with sr.AudioFile(wav_file) as source:
@@ -142,12 +174,21 @@ def check_and_solve_captcha(driver):
 
             print(f"Transcribed Text: {text}")
 
-            input_field = driver.ele('@id=audio-response')
+            input_field = driver.ele('@id=audio-response', timeout=5)
+            if not input_field:
+                print("Audio response input field not found")
+                return False
+
             input_field.input(text)
+            print("Entered transcribed text")
 
             time.sleep(1)
 
-            verify_btn = driver.ele('@id=recaptcha-verify-button')
+            verify_btn = driver.ele('@id=recaptcha-verify-button', timeout=5)
+            if not verify_btn:
+                print("Verify button not found")
+                return False
+
             verify_btn.click()
             print("Submitted CAPTCHA!")
 
@@ -164,6 +205,8 @@ def check_and_solve_captcha(driver):
             return True
         except Exception as e:
             print(f"Audio bypass failed: {e}")
+            import traceback
+            traceback.print_exc()
             # Cleanup on error
             for f_name in ['captcha.mp3', 'captcha.wav']:
                 if os.path.exists(f_name):
