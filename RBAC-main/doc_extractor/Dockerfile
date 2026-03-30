@@ -14,8 +14,8 @@ WORKDIR /app
 # Ensure pip is up to date
 RUN pip install --upgrade pip
 
-# Install PyTorch CPU-only (much smaller ~200MB vs 780MB)
-RUN pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+# Install PyTorch with CUDA 12.1 support for GPU acceleration
+RUN pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
 
 # Copy requirements and install the rest
 COPY requirements.txt .

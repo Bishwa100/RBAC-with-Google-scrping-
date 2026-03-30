@@ -3,6 +3,7 @@ TopicLens Database Models
 Models for jobs, results, and search history
 """
 from sqlalchemy import Column, String, Text, Boolean, DateTime, Integer, JSON, ForeignKey
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.db.base import Base
@@ -14,7 +15,7 @@ class TopicLensJob(Base):
     __tablename__ = "topiclens_jobs"
     
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     
     # Job details
     topic = Column(String(200), nullable=False, index=True)
@@ -41,7 +42,7 @@ class TopicLensJob(Base):
         """Convert to dictionary"""
         return {
             "id": self.id,
-            "user_id": self.user_id,
+            "user_id": str(self.user_id) if self.user_id else None,
             "topic": self.topic,
             "sources": self.sources,
             "deep_analysis": self.deep_analysis,
