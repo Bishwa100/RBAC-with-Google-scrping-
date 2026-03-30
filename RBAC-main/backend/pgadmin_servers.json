@@ -1,0 +1,14 @@
+{
+    "Servers": {
+        "1": {
+            "Name": "RBAC Database",
+            "Group": "Servers",
+            "Host": "postgres",
+            "Port": 5432,
+            "MaintenanceDB": "rbac_db",
+            "Username": "postgres",
+            "Password": "postgres",
+            "SSLMode": "prefer"
+        }
+    }
+}
