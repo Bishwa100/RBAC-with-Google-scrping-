@@ -57,7 +57,7 @@ async def create_topiclens_permission():
             
             # Find root role
             result = await db.execute(
-                select(Role).where(Role.name == "Root")
+                select(Role).where(Role.name == "root")
             )
             root_role = result.scalar_one_or_none()
             
