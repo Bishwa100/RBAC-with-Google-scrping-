@@ -1,12 +1,10 @@
-FROM nvidia/cuda:12.1.1-runtime-ubuntu22.04
+FROM python:3.10-slim
 
 # Avoid prompt during installation
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Install Python 3.10 and system dependencies
+# Install system dependencies
 RUN apt-get update && apt-get install -y \
-    python3.10 \
-    python3-pip \
     libgl1 \
     libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
@@ -14,17 +12,14 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 
 # Ensure pip is up to date
-RUN python3.10 -m pip install --upgrade pip
+RUN pip install --upgrade pip
 
-# Install PyTorch with CUDA 12.1 support
-RUN python3.10 -m pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
-
-# Install bitsandbytes separately to ensure GPU support
-RUN python3.10 -m pip install bitsandbytes
+# Install PyTorch CPU-only (much smaller ~200MB vs 780MB)
+RUN pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
 
 # Copy requirements and install the rest
 COPY requirements.txt .
-RUN python3.10 -m pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy everything else
 COPY . .
@@ -34,8 +29,8 @@ ENV TRANSFORMERS_CACHE=/app/models/pretrained_weights
 ENV HF_HOME=/app/models/pretrained_weights
 
 # Download models during build for faster startup
-RUN python3.10 download_models.py
+RUN python download_models.py
 
 EXPOSE 8001
 
-CMD ["python3.10", "-m", "uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8001"]
+CMD ["python", "-m", "uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8001"]

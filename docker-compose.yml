@@ -6,7 +6,7 @@ services:
   # ============================================================================
   
   postgres:
-    image: postgres:16
+    image: postgres:15
     container_name: rbac-postgres
     environment:
       POSTGRES_USER: postgres
@@ -76,17 +76,16 @@ services:
       # Doc Extractor
       - DOC_EXTRACTOR_URL=http://doc-extractor:8001
       
-      # TopicLens Configuration
+      # TopicLens Configuration - Ollama (using host machine)
       - TOPICLENS_REDIS_URL=redis://redis:6379/0
-      - TOPICLENS_HF_MODEL_ID=microsoft/phi-2
-      - TOPICLENS_HF_DEVICE=cpu
-      - TOPICLENS_HF_MAX_NEW_TOKENS=512
+      - TOPICLENS_OLLAMA_URL=http://host.docker.internal:11434
+      - TOPICLENS_OLLAMA_MODEL=llama3
+      - TOPICLENS_OLLAMA_MAX_TOKENS=512
       - TOPICLENS_CELERY_BROKER_URL=redis://redis:6379/0
       - TOPICLENS_CELERY_RESULT_BACKEND=redis://redis:6379/0
       
       # Display (for browser automation)
       - DISPLAY=:99
-      - NVIDIA_VISIBLE_DEVICES=all
     depends_on:
       postgres:
         condition: service_healthy
@@ -94,14 +93,7 @@ services:
         condition: service_started
       doc-extractor:
         condition: service_started
-    command: bash -c "alembic upgrade head && python create_topiclens_permissions.py && uvicorn main:app --host 0.0.0.0 --port 8000 --reload"
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
+    command: bash -c "python create_topiclens_permissions.py && uvicorn main:app --host 0.0.0.0 --port 8000 --reload"
     networks:
       - app-network
 
@@ -120,22 +112,14 @@ services:
       # Same environment as backend
       - DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/rbac_db
       - TOPICLENS_REDIS_URL=redis://redis:6379/0
-      - TOPICLENS_HF_MODEL_ID=microsoft/phi-2
-      - TOPICLENS_HF_DEVICE=cpu
-      - TOPICLENS_HF_MAX_NEW_TOKENS=512
+      - TOPICLENS_OLLAMA_URL=http://host.docker.internal:11434
+      - TOPICLENS_OLLAMA_MODEL=llama3
+      - TOPICLENS_OLLAMA_MAX_TOKENS=512
       - TOPICLENS_CELERY_BROKER_URL=redis://redis:6379/0
       - TOPICLENS_CELERY_RESULT_BACKEND=redis://redis:6379/0
       - DISPLAY=:99
-      - NVIDIA_VISIBLE_DEVICES=all
     volumes:
       - ./RBAC-main/backend:/app
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
     networks:
       - app-network
 
@@ -150,14 +134,8 @@ services:
       - "8001:8001"
     environment:
       - PYTHONUNBUFFERED=1
-      - NVIDIA_VISIBLE_DEVICES=all
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
+      - OLLAMA_URL=http://host.docker.internal:11434
+      - OLLAMA_MODEL=llama3
     networks:
       - app-network
 

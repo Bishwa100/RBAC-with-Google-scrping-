@@ -17,9 +17,13 @@ def main():
     logger.info(f"Downloading TrOCR: {PIPELINE_CFG.ocr.trocr_model_id}")
     download_huggingface_model(PIPELINE_CFG.ocr.trocr_model_id, PIPELINE_CFG.weights_dir)
 
-    # 2. Download Qwen (LLM)
-    logger.info(f"Downloading LLM: {PIPELINE_CFG.llm.model_id}")
-    download_huggingface_model(PIPELINE_CFG.llm.model_id, PIPELINE_CFG.weights_dir)
+    # 2. Download LLM (skip when using Ollama)
+    llm_provider = getattr(PIPELINE_CFG.llm, "provider", "ollama").lower()
+    if llm_provider == "ollama":
+        logger.info("Skipping LLM download: using Ollama for inference.")
+    else:
+        logger.info(f"Downloading LLM: {PIPELINE_CFG.llm.model_id}")
+        download_huggingface_model(PIPELINE_CFG.llm.model_id, PIPELINE_CFG.weights_dir)
 
     # 3. EasyOCR (it downloads internally on first run, 
     # but we can trigger it by initializing)

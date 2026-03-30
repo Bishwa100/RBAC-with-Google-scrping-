@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Create TopicLens Permission Scope and Assign to Root Role
-This script should be run after the database is initialized
+This script ensures the database is initialized first, then creates permissions.
 """
 import asyncio
 import sys
@@ -14,15 +14,20 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from app.db.session import AsyncSessionLocal
 from app.models.all import Scope, Role, UserScope, User
+from app.core.bootstrap import init_db
 import uuid
 
 async def create_topiclens_permission():
     """Create TopicLens permission scope and assign to root role"""
     print("=" * 70)
-    print("CREATING TOPICLENS PERMISSIONS")
+    print("INITIALIZING DATABASE AND CREATING TOPICLENS PERMISSIONS")
     print("=" * 70)
     
     async with AsyncSessionLocal() as db:
+        # Ensure database tables exist and root user is created
+        print("[...] Ensuring database tables exist...")
+        await init_db(db)
+        print("[OK] Database initialized")
         try:
             # Check if scope already exists
             result = await db.execute(

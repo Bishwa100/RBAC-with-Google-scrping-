@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 from typing import Optional
 import torch
 import logging
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -19,13 +20,9 @@ logger = logging.getLogger(__name__)
 if not torch.cuda.is_available():
     logger.warning(
         "\n" + "="*80 + "\n"
-        "WARNING: PyTorch is NOT detecting any NVIDIA GPUs (torch.cuda.is_available() is False).\n"
-        "If you are running this on a device that HAS an NVIDIA GPU, your Python environment\n"
-        "likely installed the CPU-only version of PyTorch.\n"
-        "To enable GPU acceleration, please reinstall PyTorch with CUDA support:\n"
-        "  pip uninstall torch torchvision torchaudio accelerate bitsandbytes\n"
-        "  pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118\n"
-        "  pip install accelerate bitsandbytes\n"
+        "INFO: PyTorch is NOT detecting any NVIDIA GPUs (torch.cuda.is_available() is False).\n"
+        "This is OK when using Ollama, as the LLM runs externally.\n"
+        "OCR components (TrOCR, EasyOCR) can still utilize GPU if available.\n"
         "="*80 + "\n"
     )
 
@@ -55,23 +52,28 @@ class OCRConfig:
 
 @dataclass
 class LLMConfig:
-    # ── Small extraction LLM ─────────────────────────────────────────────────
-    # Qwen2.5-1.5B is the sweet spot: instruction-tuned, JSON-capable, <2 GB RAM
-    model_id: str = "Qwen/Qwen2.5-1.5B-Instruct"
+    # ── Ollama Configuration ─────────────────────────────────────────────────
+    # Using Ollama Llama3 for JSON extraction
+    model_id: str = "llama3"  # This is now the Ollama model name
 
-    # Quantization: "int8" ≈ halves RAM, "int4" ≈ quarters RAM (needs bitsandbytes)
-    load_in_8bit: bool = True
-    load_in_4bit: bool = False          # Overrides 8-bit if True
-
-    # "auto" will use all GPUs if available, or CPU if not.
-    # To force a specific GPU on a multi-GPU machine, change this to "cuda:0", "cuda:1", etc.
-    device_map: str = "auto"
+    # Provider: "ollama" uses external inference and skips HF downloads
+    provider: str = "ollama"
+    
+    # Ollama connection
+    ollama_url: str = "http://localhost:11434"
+    
+    # Generation parameters
     max_new_tokens: int = 1024
     temperature: float = 0.0            # Greedy = deterministic JSON
     repetition_penalty: float = 1.1
 
     # How many times to retry if JSON parse fails
     max_retries: int = 3
+    
+    # Legacy fields for compatibility (not used with Ollama)
+    load_in_8bit: bool = False
+    load_in_4bit: bool = False
+    device_map: str = "auto"
 
 
 @dataclass

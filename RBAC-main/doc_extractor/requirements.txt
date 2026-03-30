@@ -8,12 +8,15 @@ Pillow>=10.0.0           # Image pre-processing
 easyocr>=1.7.1           # Printed text OCR (CPU-friendly, no GPU required)
 # TrOCR is loaded via transformers below (handwritten specialist)
 
-# ── HuggingFace / Model Runtime ───────────────────────────────────────────────
-huggingface_hub>=0.23.0  # Explicit snapshot downloads
-transformers>=4.40.0     # TrOCR + Qwen2.5 loading
-# torch and bitsandbytes are installed in Dockerfile to ensure CUDA version
+# ── HuggingFace / Model Runtime (for OCR only) ────────────────────────────────
+huggingface_hub>=0.23.0  # Explicit snapshot downloads for TrOCR
+transformers>=4.40.0     # TrOCR loading only
+# torch is installed in Dockerfile
 accelerate>=0.27.0       # Low-memory model loading helpers
-sentencepiece>=0.1.99    # Tokenizer dependency for some models
+sentencepiece>=0.1.99    # Tokenizer dependency
+
+# ── LLM - Using Ollama ────────────────────────────────────────────────────────
+requests>=2.32.0         # For Ollama API calls
 
 # ── Validation & Utilities ────────────────────────────────────────────────────
 jsonschema>=4.21.0       # Output schema validation

@@ -22,17 +22,43 @@ A comprehensive content analysis and web scraping platform with role-based acces
 6. **Celery Worker** - Background job processing
 7. **Doc Extractor** (port 8001) - Document processing service
 
+**External Dependencies:**
+- **Ollama** (port 11434) - LLM service running on host machine
+
 ---
 
 ## 🚀 Quick Start
 
 ### Prerequisites
 - Docker & Docker Compose
-- Or: Node.js 18+, Python 3.11+, PostgreSQL, Redis
+- **Ollama installed on your local machine** (running on port 11434)
+- Or: Node.js 18+, Python 3.11+, PostgreSQL, Redis, Ollama
+
+### Ensure Ollama is Running
+
+Before starting the application, make sure Ollama is running on your machine:
+
+```bash
+# Check if Ollama is running
+curl http://localhost:11434/api/tags
+
+# If not running, start Ollama (depends on your installation)
+# On Windows: Start Ollama from Start Menu or Task Manager
+# On Linux/Mac: ollama serve
+
+# Verify llama3 model is available
+ollama list
+
+# If llama3 is not installed, pull it
+ollama pull llama3
+```
 
 ### Start with Docker (Recommended)
 
 ```bash
+# Make sure Ollama is running on your machine first!
+ollama list  # Should show llama3
+
 # Start all services
 docker-compose up --build
 
@@ -46,6 +72,7 @@ docker-compose up -d --build
 |---------|-----|-------------|
 | **Frontend** | http://localhost:3000 | - |
 | **Backend API** | http://localhost:8000/docs | - |
+| **Ollama API** | http://localhost:11434 | (on host machine) |
 | **PgAdmin** | http://localhost:5050 | admin@admin.com / admin |
 
 **Login (Root User):**
@@ -180,10 +207,11 @@ SECRET_KEY=your-secret-key-here
 ROOT_EMAIL=admin@topiclens.com
 ROOT_PASSWORD=AdminPass123!
 
-# TopicLens
+# TopicLens - Ollama Configuration
 TOPICLENS_REDIS_URL=redis://localhost:6379/0
-TOPICLENS_HF_MODEL_ID=microsoft/phi-2
-TOPICLENS_HF_DEVICE=cpu
+TOPICLENS_OLLAMA_URL=http://localhost:11434
+TOPICLENS_OLLAMA_MODEL=llama3
+TOPICLENS_OLLAMA_MAX_TOKENS=512
 TOPICLENS_CELERY_BROKER_URL=redis://localhost:6379/0
 ```
 
@@ -280,6 +308,28 @@ alembic downgrade -1
 ---
 
 ## 🐛 Troubleshooting
+
+### Ollama connection issues
+```bash
+# Verify Ollama is running on your local machine
+curl http://localhost:11434/api/tags
+
+# Check if llama3 model is available
+ollama list
+
+# Pull llama3 if not available
+ollama pull llama3
+
+# Test Ollama directly
+curl http://localhost:11434/api/generate -d '{
+  "model": "llama3",
+  "prompt": "Hello, world!",
+  "stream": false
+}'
+
+# If Docker containers can't reach host Ollama, check firewall settings
+# On Windows, ensure Ollama is allowed through Windows Firewall
+```
 
 ### Services won't start
 ```bash

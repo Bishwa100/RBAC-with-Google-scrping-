@@ -2,108 +2,75 @@ import json
 import os
 import re
 import time
-import threading
+import requests
 from typing import Dict, Optional
 
-# Hugging Face configuration
-HF_MODEL_ID = os.getenv("HF_MODEL_ID", "microsoft/phi-2")
-HF_DEVICE = os.getenv("HF_DEVICE", "auto")  # "auto", "cpu", "cuda", "cuda:0", etc.
-HF_MAX_NEW_TOKENS = int(os.getenv("HF_MAX_NEW_TOKENS", "512"))
+# Ollama configuration
+OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3")
+OLLAMA_MAX_TOKENS = int(os.getenv("OLLAMA_MAX_TOKENS", "512"))
 
-# Global model instance (lazy loaded)
-_model = None
-_tokenizer = None
-_model_lock = threading.Lock()
-_model_loaded = False
-_model_error = None
+# Global connection check
+_ollama_checked = False
+_ollama_available = False
+_ollama_error = None
 
 
-def _load_model():
-    """Load the Hugging Face model lazily on first use."""
-    global _model, _tokenizer, _model_loaded, _model_error
+def _check_ollama():
+    """Check if Ollama is available."""
+    global _ollama_checked, _ollama_available, _ollama_error
 
-    with _model_lock:
-        if _model_loaded:
-            return _model is not None
+    if _ollama_checked:
+        return _ollama_available
 
-        try:
-            print(f"[HuggingFace] Loading model: {HF_MODEL_ID}")
-            print(f"[HuggingFace] Device: {HF_DEVICE}")
-
-            from transformers import AutoModelForCausalLM, AutoTokenizer
-            import torch
-
-            # Determine device
-            if HF_DEVICE == "auto":
-                device = "cuda" if torch.cuda.is_available() else "cpu"
+    try:
+        print(f"[Ollama] Checking connection to: {OLLAMA_URL}")
+        response = requests.get(f"{OLLAMA_URL}/api/tags", timeout=5)
+        if response.status_code == 200:
+            models = response.json().get("models", [])
+            model_names = [m.get("name", "") for m in models]
+            print(f"[Ollama] Available models: {model_names}")
+            
+            if any(OLLAMA_MODEL in name for name in model_names):
+                _ollama_available = True
+                _ollama_error = None
+                print(f"[Ollama] Model '{OLLAMA_MODEL}' is available!")
             else:
-                device = HF_DEVICE
-
-            print(f"[HuggingFace] Using device: {device}")
-
-            # Load tokenizer
-            _tokenizer = AutoTokenizer.from_pretrained(
-                HF_MODEL_ID,
-                trust_remote_code=True
-            )
-
-            # Set pad token if not set
-            if _tokenizer.pad_token is None:
-                _tokenizer.pad_token = _tokenizer.eos_token
-
-            # Load model with appropriate settings
-            load_kwargs = {
-                "trust_remote_code": True,
-                "low_cpu_mem_usage": True,
-            }
-
-            if device == "cuda":
-                load_kwargs["dtype"] = torch.float16
-                load_kwargs["device_map"] = "auto"
-            else:
-                load_kwargs["dtype"] = torch.float32
-
-            _model = AutoModelForCausalLM.from_pretrained(
-                HF_MODEL_ID,
-                **load_kwargs
-            )
-
-            if device == "cpu":
-                _model = _model.to(device)
-
-            _model.eval()
-            _model_loaded = True
-            _model_error = None
-
-            print(f"[HuggingFace] Model loaded successfully!")
-            return True
-
-        except Exception as e:
-            _model_error = str(e)
-            _model_loaded = True  # Mark as loaded to prevent retry loops
-            print(f"[HuggingFace] Failed to load model: {e}")
-            return False
+                _ollama_available = False
+                _ollama_error = f"Model '{OLLAMA_MODEL}' not found. Available: {model_names}"
+                print(f"[Ollama] {_ollama_error}")
+        else:
+            _ollama_available = False
+            _ollama_error = f"Ollama API returned status {response.status_code}"
+            print(f"[Ollama] {_ollama_error}")
+    except Exception as e:
+        _ollama_available = False
+        _ollama_error = f"Failed to connect to Ollama: {e}"
+        print(f"[Ollama] {_ollama_error}")
+    
+    _ollama_checked = True
+    return _ollama_available
 
 
 def check_model_health(model_id: str = None) -> Dict:
     """
-    Check if the Hugging Face model is loaded and ready.
+    Check if Ollama is available and the model is ready.
 
     Returns:
         {
             "healthy": bool,
             "model": str,
-            "device": str,
+            "url": str,
             "error": str or None,
             "response_time": float
         }
     """
-    model_id = model_id or HF_MODEL_ID
+    model_id = model_id or OLLAMA_MODEL
 
     result = {
         "healthy": False,
         "model": model_id,
-        "device": HF_DEVICE,
+        "url": OLLAMA_URL,
         "error": None,
         "response_time": None
     }
@@ -111,15 +78,9 @@ def check_model_health(model_id: str = None) -> Dict:
     try:
         start_time = time.time()
 
-        # Try to load model if not loaded
-        if not _model_loaded:
-            success = _load_model()
-            if not success:
-                result["error"] = _model_error or "Failed to load model"
-                return result
-
-        if _model is None:
-            result["error"] = _model_error or "Model not loaded"
+        # Check if Ollama is available
+        if not _check_ollama():
+            result["error"] = _ollama_error or "Ollama not available"
             return result
 
         # Test with a simple generation
@@ -128,14 +89,6 @@ def check_model_health(model_id: str = None) -> Dict:
 
         if test_response:
             result["healthy"] = True
-            # Get actual device
-            import torch
-            if hasattr(_model, 'device'):
-                result["device"] = str(_model.device)
-            elif torch.cuda.is_available() and next(_model.parameters()).is_cuda:
-                result["device"] = "cuda"
-            else:
-                result["device"] = "cpu"
         else:
             result["error"] = "Model test generation failed"
 
@@ -148,16 +101,24 @@ def check_model_health(model_id: str = None) -> Dict:
 # Backward compatibility alias
 def check_ollama_health(url: str = None, model: str = None) -> Dict:
     """Backward compatible alias for check_model_health."""
+    url = url or OLLAMA_URL
+    model = model or OLLAMA_MODEL
     health = check_model_health(model)
-    # Add url field for backward compatibility
-    health["url"] = "local"
-    health["models_available"] = [HF_MODEL_ID]
+    try:
+        response = requests.get(f"{url}/api/tags", timeout=5)
+        if response.status_code == 200:
+            models = response.json().get("models", [])
+            health["models_available"] = [m.get("name", "") for m in models]
+        else:
+            health["models_available"] = []
+    except:
+        health["models_available"] = []
     return health
 
 
 def call_llm(prompt: str, temperature: float = 0.3, max_tokens: int = None, max_retries: int = 2) -> str:
     """
-    Call the local Hugging Face model for text generation.
+    Call Ollama Llama3 for text generation.
 
     Args:
         prompt: The prompt to send to the model
@@ -168,66 +129,53 @@ def call_llm(prompt: str, temperature: float = 0.3, max_tokens: int = None, max_
     Returns:
         Generated text response or empty string on failure
     """
-    max_tokens = max_tokens or HF_MAX_NEW_TOKENS
+    max_tokens = max_tokens or OLLAMA_MAX_TOKENS
     last_error = None
 
-    # Ensure model is loaded
-    if not _model_loaded:
-        if not _load_model():
-            print(f"[HuggingFace] Model not loaded: {_model_error}")
-            return ""
-
-    if _model is None or _tokenizer is None:
-        print(f"[HuggingFace] Model not available: {_model_error}")
+    # Ensure Ollama is available
+    if not _check_ollama():
+        print(f"[Ollama] Not available: {_ollama_error}")
         return ""
 
     for attempt in range(max_retries + 1):
         try:
-            import torch
-
-            # Tokenize input
-            inputs = _tokenizer(
-                prompt,
-                return_tensors="pt",
-                truncation=True,
-                max_length=2048
+            response = requests.post(
+                f"{OLLAMA_URL}/api/generate",
+                json={
+                    "model": OLLAMA_MODEL,
+                    "prompt": prompt,
+                    "stream": False,
+                    "options": {
+                        "temperature": temperature,
+                        "num_predict": max_tokens,
+                    }
+                },
+                timeout=120
             )
 
-            # Move to same device as model
-            device = next(_model.parameters()).device
-            inputs = {k: v.to(device) for k, v in inputs.items()}
+            if response.status_code == 200:
+                result = response.json()
+                response_text = result.get("response", "").strip()
+                
+                if attempt > 0:
+                    print(f"[Ollama] Retry {attempt} successful!")
 
-            # Generate
-            with torch.no_grad():
-                outputs = _model.generate(
-                    **inputs,
-                    max_new_tokens=max_tokens,
-                    temperature=temperature if temperature > 0 else 0.01,
-                    do_sample=temperature > 0,
-                    pad_token_id=_tokenizer.pad_token_id,
-                    eos_token_id=_tokenizer.eos_token_id,
-                )
+                return response_text
+            else:
+                last_error = f"API error: {response.status_code} - {response.text}"
 
-            # Decode response (only the new tokens)
-            input_length = inputs["input_ids"].shape[1]
-            response_tokens = outputs[0][input_length:]
-            response_text = _tokenizer.decode(response_tokens, skip_special_tokens=True).strip()
-
-            if attempt > 0:
-                print(f"[HuggingFace] Retry {attempt} successful!")
-
-            return response_text
-
+        except requests.exceptions.Timeout:
+            last_error = "Request timeout"
         except Exception as e:
             last_error = f"Generation error: {e}"
 
         if attempt < max_retries:
             wait_time = 2 ** attempt
-            print(f"[HuggingFace] Attempt {attempt + 1} failed: {last_error}")
-            print(f"[HuggingFace] Retrying in {wait_time}s...")
+            print(f"[Ollama] Attempt {attempt + 1} failed: {last_error}")
+            print(f"[Ollama] Retrying in {wait_time}s...")
             time.sleep(wait_time)
 
-    print(f"[HuggingFace Error] All attempts failed. Last error: {last_error}")
+    print(f"[Ollama Error] All attempts failed. Last error: {last_error}")
     return ""
 
 

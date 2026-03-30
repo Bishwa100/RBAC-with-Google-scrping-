@@ -62,10 +62,6 @@ celery==5.4.0
 redis==5.0.6
 
 # ============================================================================
-# TopicLens - AI/LLM (Hugging Face)
+# TopicLens - Ollama Client (no heavy model dependencies)
 # ============================================================================
-transformers>=4.36.0
-# Note: torch should be installed separately with CUDA support in Dockerfile
-accelerate>=0.25.0
-sentencepiece>=0.1.99
-protobuf>=4.25.0
+# All LLM calls now go through Ollama API, no local model loading

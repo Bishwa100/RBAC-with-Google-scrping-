@@ -68,7 +68,7 @@ class TopicLensResult(Base):
     
     # Content
     content = Column(Text, nullable=True)
-    metadata = Column(JSON, nullable=True)  # Additional metadata
+    result_metadata = Column("metadata", JSON, nullable=True)  # Additional metadata (renamed to avoid SQLAlchemy conflict)
     
     # Analysis
     sentiment = Column(String(20), nullable=True)  # positive, negative, neutral
@@ -90,7 +90,7 @@ class TopicLensResult(Base):
             "url": self.url,
             "title": self.title,
             "content": self.content,
-            "metadata": self.metadata,
+            "metadata": self.result_metadata,
             "sentiment": self.sentiment,
             "keywords": self.keywords,
             "summary": self.summary,

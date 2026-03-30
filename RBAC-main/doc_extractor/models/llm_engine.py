@@ -1,11 +1,11 @@
 """
-models/llm_engine.py – Lightweight LLM for structured JSON extraction.
+models/llm_engine.py – Lightweight LLM for structured JSON extraction using Ollama.
 
-Model choice:  Qwen/Qwen2.5-1.5B-Instruct
-  • 1.5 B parameters → ~3 GB fp16, ~1.5 GB int8, ~800 MB int4
-  • Excellent instruction-following and JSON generation
-  • Runs on 4 GB RAM (int8) or 2 GB RAM (int4) with bitsandbytes
-  • Fallback: if quantization unavailable, loads in fp32 with CPU offloading
+Model: Ollama Llama3
+  • Uses Ollama API for inference
+  • No local model loading required
+  • Lightweight and easy to deploy
+  • Configurable via environment variables
 
 Extraction strategy
 ───────────────────
@@ -24,77 +24,15 @@ from __future__ import annotations
 import json
 import logging
 import re
+import os
+import requests
 from typing import Any
 
 logger = logging.getLogger(__name__)
 
-_tokenizer = None
-_model = None
-
-
-def _load_model(cfg):
-    """
-    cfg is the full PipelineConfig.
-    Loads LLM and Tokenizer from the local weights_dir.
-    """
-    global _tokenizer, _model
-    if _model is not None:
-        return _tokenizer, _model
-
-    from models import download_huggingface_model
-    llm_cfg = cfg.llm
-    
-    # ── Ensure model is downloaded locally ───────────────────────────────────
-    local_path = download_huggingface_model(llm_cfg.model_id, cfg.weights_dir)
-
-    logger.info(f"Loading LLM: {llm_cfg.model_id} from {local_path} …")
-    from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
-    import torch
-
-    _tokenizer = AutoTokenizer.from_pretrained(local_path, trust_remote_code=True)
-
-    # ── Quantization config ──────────────────────────────────────────────────
-    bnb_cfg = None
-    try:
-        if llm_cfg.load_in_4bit:
-            bnb_cfg = BitsAndBytesConfig(
-                load_in_4bit=True,
-                bnb_4bit_quant_type="nf4",
-                bnb_4bit_use_double_quant=True,
-                bnb_4bit_compute_dtype=torch.float16,
-            )
-        elif llm_cfg.load_in_8bit:
-            bnb_cfg = BitsAndBytesConfig(load_in_8bit=True)
-    except Exception as e:
-        logger.warning(f"bitsandbytes (quantization) not available or failed: {e}. Loading unquantized.")
-
-    load_kwargs: dict[str, Any] = {
-        "trust_remote_code": True,
-    }
-
-    # If CUDA is available, use user's device_map ("auto", "cuda:0", etc.)
-    # If not, force CPU.
-    if torch.cuda.is_available():
-        load_kwargs["device_map"] = llm_cfg.device_map
-        if bnb_cfg:
-            load_kwargs["quantization_config"] = bnb_cfg
-        else:
-            load_kwargs["torch_dtype"] = torch.float16
-    else:
-        load_kwargs["device_map"] = "cpu"
-        load_kwargs["torch_dtype"] = torch.float32
-        if bnb_cfg:
-            logger.warning("BitsAndBytes 4-bit/8-bit requested, but no GPU detected! Disabling quantization for CPU fallback.")
-
-    _model = AutoModelForCausalLM.from_pretrained(local_path, **load_kwargs)
-    _model.eval()
-    logger.info(f"LLM ready (device: {_model.device}, dtype: {_model.dtype})")
-    
-    # Check if multiple GPUs are being used
-    if torch.cuda.is_available() and getattr(_model, "hf_device_map", None):
-        logger.info(f"LLM distributed across devices: {_model.hf_device_map}")
-        
-    return _tokenizer, _model
+# Ollama configuration
+OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -182,36 +120,56 @@ def _extract_json_from_response(text: str) -> dict:
 # ─────────────────────────────────────────────────────────────────────────────
 
 class LLMEngine:
-    """Wraps Qwen2.5-1.5B-Instruct for dynamic JSON extraction."""
+    """Wraps Ollama Llama3 for dynamic JSON extraction."""
 
     def __init__(self, cfg):
         self.cfg = cfg
+        self.ollama_url = OLLAMA_URL
+        self.ollama_model = OLLAMA_MODEL
+        logger.info(f"LLM Engine initialized with Ollama at {self.ollama_url}, model: {self.ollama_model}")
 
     def _run_inference(self, messages: list[dict]) -> str:
-        """Run a chat-format inference and return the raw string response."""
-        import torch
-        tokenizer, model = _load_model(self.cfg)
-
-        # Apply chat template (Qwen2.5 supports this natively)
-        text = tokenizer.apply_chat_template(
-            messages,
-            tokenize=False,
-            add_generation_prompt=True,
-        )
-        inputs = tokenizer(text, return_tensors="pt").to(model.device)
-
-        with torch.no_grad():
-            outputs = model.generate(
-                **inputs,
-                max_new_tokens=self.cfg.llm.max_new_tokens,
-                temperature=self.cfg.llm.temperature if self.cfg.llm.temperature > 0 else None,
-                do_sample=self.cfg.llm.temperature > 0,
-                repetition_penalty=self.cfg.llm.repetition_penalty,
-                pad_token_id=tokenizer.eos_token_id,
+        """Run a chat-format inference via Ollama and return the raw string response."""
+        
+        # Convert messages to a single prompt for Ollama
+        prompt_parts = []
+        for msg in messages:
+            role = msg.get("role", "user")
+            content = msg.get("content", "")
+            if role == "system":
+                prompt_parts.append(f"System: {content}")
+            elif role == "user":
+                prompt_parts.append(f"User: {content}")
+            elif role == "assistant":
+                prompt_parts.append(f"Assistant: {content}")
+        
+        full_prompt = "\n\n".join(prompt_parts) + "\n\nAssistant:"
+        
+        try:
+            response = requests.post(
+                f"{self.ollama_url}/api/generate",
+                json={
+                    "model": self.ollama_model,
+                    "prompt": full_prompt,
+                    "stream": False,
+                    "options": {
+                        "temperature": self.cfg.llm.temperature if self.cfg.llm.temperature > 0 else 0.1,
+                        "num_predict": self.cfg.llm.max_new_tokens,
+                    }
+                },
+                timeout=120
             )
-        # Decode only the newly generated tokens
-        new_tokens = outputs[0][inputs["input_ids"].shape[1]:]
-        return tokenizer.decode(new_tokens, skip_special_tokens=True)
+            
+            if response.status_code == 200:
+                result = response.json()
+                return result.get("response", "").strip()
+            else:
+                logger.error(f"Ollama API error: {response.status_code} - {response.text}")
+                return ""
+                
+        except Exception as e:
+            logger.error(f"Ollama inference failed: {e}")
+            return ""
 
     def extract(self, ocr_text: str, source_format: str = "unknown") -> dict:
         """

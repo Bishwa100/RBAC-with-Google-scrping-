@@ -10,10 +10,10 @@ class TopicLensSettings(BaseSettings):
     # Redis Configuration
     redis_url: str = "redis://localhost:6379/0"
     
-    # LLM Configuration
-    hf_model_id: str = "microsoft/phi-2"
-    hf_device: str = "cpu"  # or "cuda" for GPU
-    hf_max_new_tokens: int = 512
+    # Ollama LLM Configuration
+    ollama_url: str = "http://localhost:11434"
+    ollama_model: str = "llama3"
+    ollama_max_tokens: int = 512
     
     # Database
     topiclens_db_url: str = "sqlite:///./topiclens.db"
@@ -32,5 +32,6 @@ class TopicLensSettings(BaseSettings):
         env_file = ".env"
         case_sensitive = False
         env_prefix = "TOPICLENS_"
+        extra = "ignore"  # Allow extra env vars without validation errors
 
 topiclens_settings = TopicLensSettings()

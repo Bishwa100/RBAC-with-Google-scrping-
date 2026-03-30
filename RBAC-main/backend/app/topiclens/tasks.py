@@ -14,19 +14,22 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # Add project root to path for proper imports in Celery context
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+topiclens_dir = os.path.dirname(os.path.abspath(__file__))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
+if topiclens_dir not in sys.path:
+    sys.path.insert(0, topiclens_dir)
 
-from scrapers.youtube_scraper import scrape_youtube
-from scrapers.universal_search_scraper import scrape_blogs, scrape_linkedin, scrape_facebook, scrape_instagram
-from scrapers.reddit_scraper import scrape_reddit_communities
-from scrapers.eventbrite_scraper import scrape_eventbrite
-from scrapers.github_scraper import scrape_github_repos
-from scrapers.twitter_scraper import scrape_twitter
-from scrapers.quora_scraper import scrape_quora
-from scrapers.blog_scraper import scrape_blog_articles
-from llm import generate_search_queries, generate_deep_insights, rank_content, check_ollama_health
-from database import save_results
+from app.topiclens.scrapers.youtube_scraper import scrape_youtube
+from app.topiclens.scrapers.universal_search_scraper import scrape_blogs, scrape_linkedin, scrape_facebook, scrape_instagram
+from app.topiclens.scrapers.reddit_scraper import scrape_reddit_communities
+from app.topiclens.scrapers.eventbrite_scraper import scrape_eventbrite
+from app.topiclens.scrapers.github_scraper import scrape_github_repos
+from app.topiclens.scrapers.twitter_scraper import scrape_twitter
+from app.topiclens.scrapers.quora_scraper import scrape_quora
+from app.topiclens.scrapers.blog_scraper import scrape_blog_articles
+from app.topiclens.llm import generate_search_queries, generate_deep_insights, rank_content, check_ollama_health
+from app.topiclens.database import save_results
 
 # Celery configuration (only if available)
 if CELERY_AVAILABLE:
