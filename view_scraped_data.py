@@ -30,7 +30,7 @@ def display_file_info(filepath):
         print(f"File: {filepath.name}")
         print(f"{'='*80}")
 
-        # Check if it's a main orchestration file or Google scraper file
+        # Check if it's a main orchestration file
         if "topic" in data:
             # Main orchestration output
             print(f"Type: Main Orchestration Results")
@@ -49,22 +49,6 @@ def display_file_info(filepath):
 
             if "error" in data:
                 print(f"\n⚠️  Error: {data['error']}")
-
-        elif "query" in data:
-            # Google scraper output
-            print(f"Type: Google Search Results")
-            print(f"Query: {data.get('query', 'N/A')}")
-            print(f"Pages Scraped: {data.get('pages_scraped', 'N/A')}")
-            print(f"Total Results: {data.get('total_results', 0)}")
-
-            # Show first few results
-            results = data.get('results', [])
-            if results:
-                print(f"\nFirst 3 Results:")
-                for i, result in enumerate(results[:3], 1):
-                    print(f"\n  {i}. {result.get('title', 'No title')}")
-                    print(f"     URL: {result.get('link', 'No URL')}")
-                    print(f"     Snippet: {result.get('snippet', 'No snippet')[:100]}...")
 
         else:
             print(f"Type: Unknown format")
@@ -102,7 +86,6 @@ def main():
     """Main function."""
     # Define directories
     backend_dir = Path(__file__).parent / "backend" / "scraped_data"
-    google_dir = Path(__file__).parent / "google scraping" / "scraped_data"
 
     print("\n" + "="*80)
     print("SCRAPED DATA VIEWER")
@@ -117,24 +100,20 @@ def main():
             print(f"File not found: {filepath}")
         return
 
-    # Show latest from both directories
+    # Show latest from scraped data directory
     print("\n📊 MAIN ORCHESTRATION RESULTS")
     show_latest(backend_dir, count=5)
-
-    print("\n🔍 GOOGLE SEARCH RESULTS")
-    show_latest(google_dir, count=5)
 
     # Interactive mode
     print("\nOptions:")
     print("1. View details of a specific file (enter file number)")
     print("2. View all files in backend/scraped_data")
-    print("3. View all files in google scraping/scraped_data")
-    print("4. Exit")
+    print("3. Exit")
 
-    choice = input("\nEnter your choice (1-4): ").strip()
+    choice = input("\nEnter your choice (1-3): ").strip()
 
     if choice == "1":
-        all_files = list_data_files(backend_dir) + list_data_files(google_dir)
+        all_files = list_data_files(backend_dir)
         if not all_files:
             print("No files available.")
             return
@@ -158,11 +137,6 @@ def main():
             display_file_info(f)
 
     elif choice == "3":
-        files = list_data_files(google_dir)
-        for f in files:
-            display_file_info(f)
-
-    elif choice == "4":
         print("Goodbye!")
     else:
         print("Invalid choice.")

@@ -20,7 +20,6 @@ services:
       - HF_DEVICE=cuda
       - HF_MAX_NEW_TOKENS=512
       - DATABASE_URL=sqlite:///./topicLens.db
-      - SERPSHOT_API_KEY=5bff7fc157df396b31466b9f0951a485
       - DISPLAY=:99
       - NVIDIA_VISIBLE_DEVICES=all
     volumes:
@@ -45,7 +44,6 @@ services:
       - HF_DEVICE=cuda
       - HF_MAX_NEW_TOKENS=512
       - DATABASE_URL=sqlite:///./topicLens.db
-      - SERPSHOT_API_KEY=5bff7fc157df396b31466b9f0951a485
       - DISPLAY=:99
       - NVIDIA_VISIBLE_DEVICES=all
     volumes:

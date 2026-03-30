@@ -27,7 +27,6 @@ from scrapers.quora_scraper import scrape_quora
 from scrapers.blog_scraper import scrape_blog_articles
 from llm import generate_search_queries, generate_deep_insights, rank_content, check_ollama_health
 from database import save_results
-import google_api
 
 # Celery configuration (only if available)
 if CELERY_AVAILABLE:
@@ -489,14 +488,13 @@ if CELERY_AVAILABLE and celery_app:
 
 
 @celery_task_decorator(bind=True, name="scrape_topic")
-def scrape_topic_task(self, topic: str, job_id: str, search_mode: str = "scraping", sources: list = None):
+def scrape_topic_task(self, topic: str, job_id: str, sources: list = None):
     """
     Main task that orchestrates all scraping/API and LLM operations.
 
     Args:
         topic: The search topic
         job_id: Unique job identifier
-        search_mode: "scraping" or "api" (default: "scraping")
         sources: List of platforms to search (default: all platforms)
     """
     try:
@@ -518,101 +516,62 @@ def scrape_topic_task(self, topic: str, job_id: str, search_mode: str = "scrapin
 
         results = {}
 
-        # Determine which method to use
-        use_api = (search_mode == "api" and google_api.is_api_available())
+        # Use traditional web scraping for selected platforms
+        self.update_state(
+            state="PROGRESS",
+            meta={"step": "Scraping all sources in parallel...", "progress": 30}
+        )
 
-        if use_api:
-            # Use Google API for selected platforms
-            self.update_state(
-                state="PROGRESS",
-                meta={"step": "Fetching results via Google API...", "progress": 30}
-            )
+        # Build scraper tasks dynamically based on selected sources
+        scraper_tasks = {}
+        if "youtube" in sources:
+            scraper_tasks["youtube"] = (scrape_youtube, q.get("youtube_query", topic))
+        if "github" in sources:
+            scraper_tasks["github"] = (scrape_github_repos, q.get("github_query", topic))
+        if "linkedin" in sources:
+            scraper_tasks["linkedin"] = (scrape_linkedin, q.get("linkedin_query", f"{topic} linkedin"))
+        if "facebook" in sources:
+            scraper_tasks["facebook"] = (scrape_facebook, q.get("facebook_query", f"{topic} facebook groups"))
+        if "instagram" in sources:
+            scraper_tasks["instagram"] = (scrape_instagram, q.get("instagram_query", f"{topic} instagram"))
+        if "twitter" in sources:
+            scraper_tasks["twitter"] = (scrape_twitter, q.get("twitter_query", f"{topic} expert tweets"))
+        if "quora" in sources:
+            scraper_tasks["quora"] = (scrape_quora, q.get("quora_query", f"{topic} questions answers"))
+        if "blogs" in sources:
+            scraper_tasks["blogs"] = (scrape_blog_articles, q.get("blog_query", f"{topic} tutorial blog"))
+        if "reddit" in sources:
+            scraper_tasks["reddit"] = (scrape_reddit_communities, q.get("reddit_query", topic))
+        if "events" in sources:
+            scraper_tasks["events"] = (scrape_eventbrite, q.get("events_query", f"{topic} workshop"))
 
-            # Search only selected platforms
-            if "youtube" in sources:
-                results["youtube"] = google_api.search_youtube_videos(q.get("youtube_query", topic))
-            if "github" in sources:
-                results["github"] = google_api.search_github_repos(q.get("github_query", topic))
-            if "reddit" in sources:
-                results["reddit"] = google_api.search_reddit_content(q.get("reddit_query", topic))
-            if "twitter" in sources:
-                results["twitter"] = google_api.search_twitter_content(q.get("twitter_query", topic))
-            if "blogs" in sources:
-                results["blogs"] = google_api.search_blog_articles(q.get("blog_query", f"{topic} tutorial"))
-            if "linkedin" in sources:
-                results["linkedin"] = google_api.search_linkedin_content(q.get("linkedin_query", topic))
-            if "quora" in sources:
-                results["quora"] = google_api.search_quora_content(q.get("quora_query", topic))
-            if "events" in sources:
-                results["events"] = google_api.search_events(q.get("events_query", f"{topic} event"))
+        # Execute all scrapers in parallel
+        print(f"[PARALLEL] Starting {len(scraper_tasks)} scrapers in parallel...")
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            # Submit all scraper tasks
+            future_to_source = {
+                executor.submit(func, query): source_name
+                for source_name, (func, query) in scraper_tasks.items()
+            }
 
-            # Fill in platforms that API doesn't support with scraping (if selected)
-            if "facebook" in sources:
-                results["facebook"] = scrape_facebook(q.get("facebook_query", f"{topic} facebook groups"))
-            if "instagram" in sources:
-                results["instagram"] = scrape_instagram(q.get("instagram_query", f"{topic} instagram"))
+            # Collect results as they complete
+            completed = 0
+            for future in as_completed(future_to_source):
+                source_name = future_to_source[future]
+                completed += 1
+                try:
+                    results[source_name] = future.result(timeout=120)
+                    print(f"[PARALLEL] Completed {source_name} ({completed}/{len(scraper_tasks)})")
+                except Exception as e:
+                    print(f"[PARALLEL] Error scraping {source_name}: {e}")
+                    results[source_name] = []
 
-        else:
-            # Use traditional web scraping for selected platforms
-            if search_mode == "api":
-                print("[Warning] API mode requested but not available. Falling back to scraping.")
-
-            # PARALLEL SCRAPING - All scrapers run simultaneously for speed
-            self.update_state(
-                state="PROGRESS",
-                meta={"step": "Scraping all sources in parallel...", "progress": 30}
-            )
-
-            # Build scraper tasks dynamically based on selected sources
-            scraper_tasks = {}
-            if "youtube" in sources:
-                scraper_tasks["youtube"] = (scrape_youtube, q.get("youtube_query", topic))
-            if "github" in sources:
-                scraper_tasks["github"] = (scrape_github_repos, q.get("github_query", topic))
-            if "linkedin" in sources:
-                scraper_tasks["linkedin"] = (scrape_linkedin, q.get("linkedin_query", f"{topic} linkedin"))
-            if "facebook" in sources:
-                scraper_tasks["facebook"] = (scrape_facebook, q.get("facebook_query", f"{topic} facebook groups"))
-            if "instagram" in sources:
-                scraper_tasks["instagram"] = (scrape_instagram, q.get("instagram_query", f"{topic} instagram"))
-            if "twitter" in sources:
-                scraper_tasks["twitter"] = (scrape_twitter, q.get("twitter_query", f"{topic} expert tweets"))
-            if "quora" in sources:
-                scraper_tasks["quora"] = (scrape_quora, q.get("quora_query", f"{topic} questions answers"))
-            if "blogs" in sources:
-                scraper_tasks["blogs"] = (scrape_blog_articles, q.get("blog_query", f"{topic} tutorial blog"))
-            if "reddit" in sources:
-                scraper_tasks["reddit"] = (scrape_reddit_communities, q.get("reddit_query", topic))
-            if "events" in sources:
-                scraper_tasks["events"] = (scrape_eventbrite, q.get("events_query", f"{topic} workshop"))
-
-            # Execute all scrapers in parallel
-            print(f"[PARALLEL] Starting {len(scraper_tasks)} scrapers in parallel...")
-            with ThreadPoolExecutor(max_workers=10) as executor:
-                # Submit all scraper tasks
-                future_to_source = {
-                    executor.submit(func, query): source_name
-                    for source_name, (func, query) in scraper_tasks.items()
-                }
-
-                # Collect results as they complete
-                completed = 0
-                for future in as_completed(future_to_source):
-                    source_name = future_to_source[future]
-                    completed += 1
-                    try:
-                        results[source_name] = future.result(timeout=120)
-                        print(f"[PARALLEL] Completed {source_name} ({completed}/{len(scraper_tasks)})")
-                    except Exception as e:
-                        print(f"[PARALLEL] Error scraping {source_name}: {e}")
-                        results[source_name] = []
-
-                    # Update progress
-                    progress = 30 + int((completed / len(scraper_tasks)) * 50)
-                    self.update_state(
-                        state="PROGRESS",
-                        meta={"step": f"Scraped {completed}/{len(scraper_tasks)} sources...", "progress": progress}
-                    )
+                # Update progress
+                progress = 30 + int((completed / len(scraper_tasks)) * 50)
+                self.update_state(
+                    state="PROGRESS",
+                    meta={"step": f"Scraped {completed}/{len(scraper_tasks)} sources...", "progress": progress}
+                )
 
         # Step 6: Rank content using LLM
         self.update_state(
@@ -650,7 +609,7 @@ def scrape_topic_task(self, topic: str, job_id: str, search_mode: str = "scrapin
             "results": ranked_results,
             "total_results": sum(counts.values()),
             "counts": counts,
-            "search_mode": "api" if use_api else "scraping",
+            "search_mode": "scraping",
             "sources_searched": sources
         }
 

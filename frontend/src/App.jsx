@@ -46,7 +46,7 @@ export default function App() {
   }, [])
 
   const handleSearch = async (searchParams) => {
-    const { topic, searchMode, sources } = searchParams
+    const { topic, sources } = searchParams
 
     setStatus('loading')
     setData(null)
@@ -61,7 +61,6 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           topic,
-          search_mode: searchMode,
           sources: sources
         }),
       })
@@ -91,7 +90,6 @@ export default function App() {
               insights: statusData.insights,
               results: statusData.results,
               total_results: statusData.total_results,
-              search_mode: statusData.search_mode,
               sources_searched: statusData.sources_searched
             })
             setStatus('done')
@@ -253,7 +251,6 @@ export default function App() {
       <SearchBar 
         onSearch={handleSearch} 
         isLoading={status === 'loading'}
-        apiUrl={API_URL}
       />
 
       {status === 'loading' && (
