@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, status, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
 from app.db.session import get_db
-from app.core.deps import get_current_user, require_scope
+from app.core.deps import get_current_user, RequireScope
 from app.models.all import User
 from app.schemas.common import success_response, error_response
 from pydantic import BaseModel, Field
@@ -38,7 +38,7 @@ class ContentAnalyzeRequest(BaseModel):
 @router.post("/search", response_model=dict)
 async def search_topic(
     data: TopicSearchRequest,
-    current_user: User = Depends(require_scope("topiclens:access")),
+    current_user: User = Depends(RequireScope("topiclens", "access")),
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -100,7 +100,7 @@ async def search_topic(
 @router.get("/status/{job_id}", response_model=dict)
 async def get_job_status(
     job_id: str,
-    current_user: User = Depends(require_scope("topiclens:access")),
+    current_user: User = Depends(RequireScope("topiclens", "access")),
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -141,7 +141,7 @@ async def get_job_status(
 @router.post("/analyze", response_model=dict)
 async def analyze_content(
     data: ContentAnalyzeRequest,
-    current_user: User = Depends(require_scope("topiclens:access")),
+    current_user: User = Depends(RequireScope("topiclens", "access")),
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -192,7 +192,7 @@ async def analyze_content(
 
 @router.get("/sources", response_model=dict)
 async def get_available_sources(
-    current_user: User = Depends(require_scope("topiclens:access"))
+    current_user: User = Depends(RequireScope("topiclens", "access"))
 ):
     """
     Get list of available sources for scraping
@@ -208,7 +208,7 @@ async def get_available_sources(
 
 @router.get("/jobs", response_model=dict)
 async def get_all_jobs(
-    current_user: User = Depends(require_scope("topiclens:access")),
+    current_user: User = Depends(RequireScope("topiclens", "access")),
     db: AsyncSession = Depends(get_db),
     limit: int = 50,
     offset: int = 0
