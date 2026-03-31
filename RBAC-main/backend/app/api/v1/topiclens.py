@@ -360,25 +360,15 @@ async def share_content(
     
     **Root/Admin only** - Only root users can share content
     
-    - **result_id**: ID of the TopicLens result to share
     - **job_id**: ID of the TopicLens job
     - **role_ids**: List of role IDs to share with
+    - **source**: Source of the content (youtube, github, etc.)
+    - **url**: URL of the content
+    - **title**: Title of the content (optional)
+    - **content**: Content/description (optional)
     - **notes**: Optional notes for the shared content
     """
     try:
-        # Verify result exists
-        result_query = await db.execute(
-            select(TopicLensResult).where(TopicLensResult.id == data.result_id)
-        )
-        result = result_query.scalar_one_or_none()
-        
-        if not result:
-            return error_response(
-                error="result_not_found",
-                detail=f"Result {data.result_id} not found",
-                status_code=status.HTTP_404_NOT_FOUND
-            )
-        
         # Verify job exists
         job_query = await db.execute(
             select(TopicLensJob).where(TopicLensJob.id == data.job_id)
@@ -388,8 +378,7 @@ async def share_content(
         if not job:
             return error_response(
                 error="job_not_found",
-                detail=f"Job {data.job_id} not found",
-                status_code=status.HTTP_404_NOT_FOUND
+                detail=f"Job {data.job_id} not found"
             )
         
         # Verify all roles exist
@@ -401,9 +390,30 @@ async def share_content(
         if len(roles) != len(data.role_ids):
             return error_response(
                 error="invalid_roles",
-                detail="One or more role IDs are invalid",
-                status_code=status.HTTP_400_BAD_REQUEST
+                detail="One or more role IDs are invalid"
             )
+        
+        # Check if result already exists for this job + URL
+        result_query = await db.execute(
+            select(TopicLensResult).where(
+                TopicLensResult.job_id == data.job_id,
+                TopicLensResult.url == data.url
+            )
+        )
+        result = result_query.scalar_one_or_none()
+        
+        # If result doesn't exist, create it on-demand
+        if not result:
+            result = TopicLensResult(
+                job_id=data.job_id,
+                source=data.source,
+                url=data.url,
+                title=data.title,
+                content=data.content,
+                result_metadata={"rank": data.rank} if data.rank else None
+            )
+            db.add(result)
+            await db.flush()
         
         # Create share records
         share_ids = []
@@ -411,7 +421,7 @@ async def share_content(
             # Check if already shared with this role
             existing_query = await db.execute(
                 select(TopicLensSharedContent).where(
-                    TopicLensSharedContent.result_id == data.result_id,
+                    TopicLensSharedContent.result_id == result.id,
                     TopicLensSharedContent.shared_with_role_id == role_id
                 )
             )
@@ -423,7 +433,7 @@ async def share_content(
             
             # Create new share
             share = TopicLensSharedContent(
-                result_id=data.result_id,
+                result_id=result.id,
                 job_id=data.job_id,
                 shared_by_user_id=current_user.id,
                 shared_with_role_id=role_id,
@@ -448,8 +458,7 @@ async def share_content(
         await db.rollback()
         return error_response(
             error="share_failed",
-            detail=str(e),
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+            detail=str(e)
         )
 
 

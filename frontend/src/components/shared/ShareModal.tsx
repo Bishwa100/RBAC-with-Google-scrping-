@@ -7,18 +7,24 @@ import { Role } from '@/types'
 interface ShareModalProps {
   isOpen: boolean
   onClose: () => void
-  resultId: number
   jobId: string
+  source: string
+  url: string
   resultTitle?: string
+  content?: string
+  rank?: number
   onShareSuccess?: () => void
 }
 
 export default function ShareModal({
   isOpen,
   onClose,
-  resultId,
   jobId,
+  source,
+  url,
   resultTitle,
+  content,
+  rank,
   onShareSuccess
 }: ShareModalProps) {
   const [roles, setRoles] = useState<Role[]>([])
@@ -75,9 +81,13 @@ export default function ShareModal({
 
     try {
       const response = await topiclensAPI.shareContent({
-        result_id: resultId,
         job_id: jobId,
         role_ids: selectedRoleIds,
+        source: source,
+        url: url,
+        title: resultTitle,
+        content: content,
+        rank: rank,
         notes: notes.trim() || undefined
       })
 

@@ -9,10 +9,15 @@ from datetime import datetime
 
 class ShareContentRequest(BaseModel):
     """Request to share content with specific roles"""
-    result_id: int = Field(..., description="ID of the TopicLens result to share")
     job_id: str = Field(..., description="ID of the TopicLens job")
     role_ids: List[UUID4] = Field(..., description="List of role IDs to share with")
     notes: Optional[str] = Field(None, description="Optional notes for the shared content")
+    # Content details for on-demand result creation
+    source: str = Field(..., description="Source of the content (youtube, github, etc.)")
+    url: str = Field(..., description="URL of the content")
+    title: Optional[str] = Field(None, description="Title of the content")
+    content: Optional[str] = Field(None, description="Content/description")
+    rank: Optional[int] = Field(None, description="Rank of the result")
 
 
 class ShareContentResponse(BaseModel):

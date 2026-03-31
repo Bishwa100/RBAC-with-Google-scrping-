@@ -112,9 +112,13 @@ export const topiclensAPI = {
 
   // Content Sharing endpoints
   shareContent: (data: {
-    result_id: number
     job_id: string
     role_ids: string[]
+    source: string
+    url: string
+    title?: string
+    content?: string
+    rank?: number
     notes?: string
   }): Promise<any> => 
     api.post('/api/v1/topiclens/share', data),

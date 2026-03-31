@@ -147,9 +147,12 @@ export default function TopicSearchPage() {
             setShareModalOpen(false)
             setSelectedResult(null)
           }}
-          resultId={selectedResult.id}
           jobId={selectedResult.job_id}
+          source={selectedResult.source}
+          url={selectedResult.url}
           resultTitle={selectedResult.title || selectedResult.url}
+          content={selectedResult.content || selectedResult.summary || undefined}
+          rank={selectedResult.rank}
           onShareSuccess={() => {
             // Optional: Show success notification
           }}
