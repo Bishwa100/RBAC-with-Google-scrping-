@@ -109,6 +109,27 @@ export const topiclensAPI = {
   // Health check
   healthCheck: (): Promise<any> => 
     api.get('/api/v1/topiclens/health'),
+
+  // Content Sharing endpoints
+  shareContent: (data: {
+    result_id: number
+    job_id: string
+    role_ids: string[]
+    notes?: string
+  }): Promise<any> => 
+    api.post('/api/v1/topiclens/share', data),
+
+  getMySharedContent: (limit: number = 50, offset: number = 0): Promise<any> => 
+    api.get(`/api/v1/topiclens/my-shared-content?limit=${limit}&offset=${offset}`),
+
+  getAllSharedContent: (limit: number = 100, offset: number = 0, roleId?: string): Promise<any> => {
+    const params = new URLSearchParams({ limit: String(limit), offset: String(offset) })
+    if (roleId) params.append('role_id', roleId)
+    return api.get(`/api/v1/topiclens/shared?${params.toString()}`)
+  },
+
+  revokeShare: (shareId: string): Promise<any> => 
+    api.delete(`/api/v1/topiclens/share/${shareId}`),
 }
 
 export default api

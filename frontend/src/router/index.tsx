@@ -15,6 +15,8 @@ import RecordSubmit from '../pages/records/RecordSubmit'
 import EditRequestListPage from '../pages/edit-requests/EditRequestList'
 import Dashboard from '../pages/Dashboard'
 import ActivityLogPage from '../pages/ActivityLog'
+import TopicSearchPage from '../pages/TopicSearchPage'
+import SharedContentPage from '../pages/SharedContentPage'
 
 // Placeholder components
 const Placeholder = ({ title }: { title: string }) => (
@@ -143,6 +145,22 @@ export const router = createBrowserRouter([
     element: (
       <ProtectedRoute minLevel={4}>
         <MyProfile />
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: '/topiclens',
+    element: (
+      <ProtectedRoute minLevel={0}>
+        <TopicSearchPage />
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: '/shared-content',
+    element: (
+      <ProtectedRoute minLevel={4}>
+        <SharedContentPage />
       </ProtectedRoute>
     ),
   },

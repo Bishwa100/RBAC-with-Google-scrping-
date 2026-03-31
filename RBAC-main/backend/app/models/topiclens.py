@@ -97,3 +97,39 @@ class TopicLensResult(Base):
             "summary": self.summary,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
+
+class TopicLensSharedContent(Base):
+    """Model for tracking content shared with specific roles"""
+    __tablename__ = "topiclens_shared_content"
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    result_id = Column(Integer, ForeignKey("topiclens_results.id"), nullable=False)
+    job_id = Column(String(36), ForeignKey("topiclens_jobs.id"), nullable=False)
+    
+    # Sharing information
+    shared_by_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    shared_with_role_id = Column(UUID(as_uuid=True), ForeignKey("roles.id"), nullable=False)
+    
+    # Optional metadata
+    notes = Column(Text, nullable=True)
+    
+    # Timestamp
+    shared_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    
+    # Relationships
+    result = relationship("TopicLensResult", backref="shared_instances")
+    job = relationship("TopicLensJob", backref="shared_instances")
+    shared_by = relationship("User", foreign_keys=[shared_by_user_id])
+    shared_with_role = relationship("Role", foreign_keys=[shared_with_role_id])
+    
+    def to_dict(self):
+        """Convert to dictionary"""
+        return {
+            "id": str(self.id),
+            "result_id": self.result_id,
+            "job_id": self.job_id,
+            "shared_by_user_id": str(self.shared_by_user_id),
+            "shared_with_role_id": str(self.shared_with_role_id),
+            "notes": self.notes,
+            "shared_at": self.shared_at.isoformat() if self.shared_at else None,
+        }

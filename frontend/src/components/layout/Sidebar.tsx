@@ -10,13 +10,22 @@ import {
   Building2, 
   LogOut,
   User,
-  History
+  History,
+  Search,
+  Share2
 } from 'lucide-react'
 import { useAuthStore } from '../../store/authStore'
 import clsx from 'clsx'
 
 const Sidebar: React.FC = () => {
   const { user, minRoleLevel, logout } = useAuthStore()
+
+  // Check if user is root/admin
+  const isRootUser = user?.roles?.some(
+    role => role.name.toLowerCase() === 'root' || 
+            role.name.toLowerCase() === 'admin' || 
+            role.level === 0
+  ) || minRoleLevel === 0
 
   const navItems = [
     { 
@@ -69,6 +78,22 @@ const Sidebar: React.FC = () => {
     },
   ]
 
+  // TopicLens navigation items
+  const topiclensItems = [
+    ...(isRootUser ? [{
+      label: 'TopicLens Search',
+      to: '/topiclens',
+      icon: Search,
+      minLevel: 0
+    }] : []),
+    {
+      label: 'Shared Content',
+      to: '/shared-content',
+      icon: Share2,
+      minLevel: 4
+    }
+  ]
+
   const filteredNavItems = navItems.filter(item => minRoleLevel <= item.minLevel)
 
   return (
@@ -114,6 +139,32 @@ const Sidebar: React.FC = () => {
             <span>{item.label}</span>
           </NavLink>
         ))}
+
+        {/* TopicLens Section Divider */}
+        {topiclensItems.length > 0 && (
+          <>
+            <div className="pt-4 pb-2">
+              <div className="text-[10px] font-mono text-muted uppercase tracking-widest px-3">
+                TopicLens
+              </div>
+            </div>
+            {topiclensItems.map((item) => (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                className={({ isActive }) => clsx(
+                  "flex items-center space-x-3 px-3 py-2 rounded-md transition-colors font-syne font-bold",
+                  isActive 
+                    ? "bg-accent/10 text-accent" 
+                    : "text-muted hover:bg-bg-surface2 hover:text-text"
+                )}
+              >
+                <item.icon size={20} />
+                <span>{item.label}</span>
+              </NavLink>
+            ))}
+          </>
+        )}
       </nav>
 
       <div className="p-4 border-t border-border space-y-2">

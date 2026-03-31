@@ -47,3 +47,53 @@ export interface ApiResponse<T> {
   error?: string;
   detail?: string;
 }
+
+// TopicLens Types
+export interface SharedContentItem {
+  share_id: string;
+  result_id: number;
+  job_id: string;
+  
+  // Content details
+  topic: string;
+  source: string;
+  url: string;
+  title: string | null;
+  content: string | null;
+  metadata: Record<string, any> | null;
+  
+  // Analysis
+  sentiment: string | null;
+  keywords: string[] | null;
+  summary: string | null;
+  
+  // Sharing metadata
+  shared_by_user_id: string;
+  shared_by_username: string;
+  shared_with_role_id: string;
+  shared_with_role_name: string;
+  notes: string | null;
+  shared_at: string;
+  
+  // Timestamps
+  created_at: string;
+}
+
+export interface ShareContentRequest {
+  result_id: number;
+  job_id: string;
+  role_ids: string[];
+  notes?: string;
+}
+
+export interface ShareContentResponse {
+  success: boolean;
+  message: string;
+  shared_count: number;
+  share_ids: string[];
+}
+
+export interface MySharedContentResponse {
+  items: SharedContentItem[];
+  total: number;
+}

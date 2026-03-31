@@ -107,3 +107,29 @@ def can_manage_user(manager: User, target_user: User) -> bool:
     if manager.dept_id != target_user.dept_id:
         return False
     return True
+
+class RequireRootUser:
+    """Dependency to ensure only root/admin users can access"""
+    
+    async def __call__(self, current_user: User = Depends(get_current_user)) -> User:
+        is_root = any(
+            ur.role.name.lower() in ['root', 'admin', 'superadmin'] 
+            or ur.role.level == 0
+            for ur in current_user.roles
+        )
+        
+        if not is_root:
+            raise APIException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                error="root_required",
+                detail="This operation requires root or admin privileges"
+            )
+        return current_user
+
+def is_root_user(user: User) -> bool:
+    """Helper function to check if user is root/admin"""
+    return any(
+        ur.role.name.lower() in ['root', 'admin', 'superadmin'] 
+        or ur.role.level == 0
+        for ur in user.roles
+    )
