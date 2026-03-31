@@ -521,7 +521,7 @@ async def get_my_shared_content(
                 "keywords": share.result.keywords,
                 "summary": share.result.summary,
                 "shared_by_user_id": str(share.shared_by_user_id),
-                "shared_by_username": share.shared_by.username,
+                "shared_by_username": share.shared_by.email,  # Using email as username
                 "shared_with_role_id": str(share.shared_with_role_id),
                 "shared_with_role_name": share.shared_with_role.name,
                 "notes": share.notes,
@@ -539,8 +539,7 @@ async def get_my_shared_content(
     except Exception as e:
         return error_response(
             error="fetch_failed",
-            detail=str(e),
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+            detail=str(e)
         )
 
 
@@ -614,8 +613,7 @@ async def get_all_shared_content(
     except Exception as e:
         return error_response(
             error="fetch_failed",
-            detail=str(e),
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+            detail=str(e)
         )
 
 
