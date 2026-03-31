@@ -44,7 +44,9 @@ export default function ShareModal({
     try {
       const response = await api.get('/api/v1/roles')
       if (response.success && response.data) {
-        setRoles(response.data.roles || [])
+        // Handle both formats: { roles: [...] } or direct array [...]
+        const rolesData = response.data.roles || (Array.isArray(response.data) ? response.data : [])
+        setRoles(rolesData)
       }
     } catch (err: any) {
       setError('Failed to load roles')

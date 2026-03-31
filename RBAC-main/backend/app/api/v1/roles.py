@@ -22,7 +22,7 @@ async def list_roles(db: AsyncSession = Depends(get_db), current_user: User = De
         
     result = await db.execute(query)
     roles = result.scalars().all()
-    return success_response(data=[RoleResponse.model_validate(r).model_dump() for r in roles])
+    return success_response(data={"roles": [RoleResponse.model_validate(r).model_dump() for r in roles]})
 
 @router.post("/", response_model=dict, status_code=status.HTTP_201_CREATED)
 async def create_role(

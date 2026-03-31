@@ -111,7 +111,10 @@ export default function TopicSearchPage() {
     const resultData = jobStatus.result.results
     
     // Iterate through each source (youtube, github, etc.)
+    // Skip 'top_10_overall' as it's a duplicate aggregation of other sources
     Object.entries(resultData).forEach(([source, items]) => {
+      if (source === 'top_10_overall' || source === 'Top_10_overall') return
+      
       if (Array.isArray(items)) {
         items.forEach((item: any, index: number) => {
           allResults.push({
