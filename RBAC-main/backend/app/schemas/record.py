@@ -16,7 +16,7 @@ class RecordUpdate(BaseModel):
 class RecordResponse(RecordBase):
     id: UUID
     submitted_by: UUID
-    dept_id: UUID
+    dept_id: Optional[UUID]
     is_frozen: bool
     frozen_at: datetime
     unfrozen_at: Optional[datetime]

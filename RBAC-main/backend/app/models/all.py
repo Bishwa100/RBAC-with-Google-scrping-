@@ -80,7 +80,7 @@ class DataRecord(Base):
     __tablename__ = "data_records"
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     submitted_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
-    dept_id = Column(UUID(as_uuid=True), ForeignKey("departments.id"), nullable=False)
+    dept_id = Column(UUID(as_uuid=True), ForeignKey("departments.id"), nullable=True)
     record_type = Column(String(100), nullable=False)
     payload = Column(JSONB, nullable=False)
     is_frozen = Column(Boolean, default=True)
