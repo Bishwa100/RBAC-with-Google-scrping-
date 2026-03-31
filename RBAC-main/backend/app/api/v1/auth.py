@@ -7,6 +7,7 @@ from app.schemas.common import success_response, error_response
 from app.core.security import verify_password, create_access_token, create_refresh_token, get_password_hash
 from app.models.all import User, Role, UserRole
 from app.core.exceptions import APIException
+from app.core.deps import get_current_user, RequireScope
 from jose import jwt, JWTError
 from app.core.config import settings
 
@@ -87,7 +88,11 @@ async def refresh(data: RefreshToken, db: AsyncSession = Depends(get_db)):
     return success_response(data={"access_token": access_token})
 
 @router.post("/logout", response_model=dict)
-async def logout(data: RefreshToken):
+async def logout(data: RefreshToken, current_user: User = Depends(RequireScope("auth", "logout"))):
+    """
+    Logout user by blacklisting refresh token
+    Requires: auth:logout scope
+    """
     token_blacklist.add(data.refresh_token)
     return success_response(message="Logged out successfully")
 

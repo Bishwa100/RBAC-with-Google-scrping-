@@ -25,6 +25,8 @@ class Role(Base):
     dept_id = Column(UUID(as_uuid=True), ForeignKey("departments.id"), nullable=True)
     description = Column(Text)
     created_at = Column(DateTime(timezone=True), default=utc_now)
+    
+    role_scopes = relationship("RoleScope", foreign_keys="RoleScope.role_id", cascade="all, delete-orphan", lazy="selectin")
 
 class User(Base):
     __tablename__ = "users"
@@ -63,6 +65,11 @@ class Scope(Base):
     action = Column(String(50), nullable=False)
     dept_context = Column(UUID(as_uuid=True), ForeignKey("departments.id"), nullable=True)
     description = Column(Text)
+    
+    @property
+    def scope_string(self):
+        """Returns the scope in resource:action format"""
+        return f"{self.resource}:{self.action}"
 
 class UserScope(Base):
     __tablename__ = "user_scopes"

@@ -11,6 +11,12 @@ class ScopeBase(BaseModel):
 class ScopeCreate(ScopeBase):
     pass
 
+class ScopeUpdate(BaseModel):
+    resource: Optional[str] = None
+    action: Optional[str] = None
+    dept_context: Optional[UUID] = None
+    description: Optional[str] = None
+
 class ScopeResponse(ScopeBase):
     id: UUID
     model_config = ConfigDict(from_attributes=True)

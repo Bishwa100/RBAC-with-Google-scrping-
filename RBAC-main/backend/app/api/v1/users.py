@@ -14,7 +14,7 @@ import re
 from app.db.session import get_db
 from app.schemas.user import UserCreate, UserUpdate, UserResponse
 from app.schemas.common import success_response
-from app.core.deps import get_current_user, RequireRoleLevel, get_user_min_level, can_manage_user
+from app.core.deps import get_current_user, RequireScope, get_user_min_level, can_manage_user
 from app.models.all import User, UserRole, Role, Scope, UserScope, DataRecord, EditRequest, DocumentExtraction
 from app.core.exceptions import APIException
 from app.core.security import get_password_hash
@@ -24,7 +24,8 @@ from app.core.config import settings
 router = APIRouter()
 
 @router.get("/stats/{id}", response_model=dict)
-async def get_user_stats(id: UUID, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def get_user_stats(id: UUID, db: AsyncSession = Depends(get_db), current_user: User = Depends(RequireScope("users", "read"))):
+    """Get user statistics. Required scope: users:read"""
     target_user = await db.get(User, id)
     if not target_user:
         raise APIException(status.HTTP_404_NOT_FOUND, "not_found", "User not found")
@@ -60,7 +61,8 @@ async def get_user_stats(id: UUID, db: AsyncSession = Depends(get_db), current_u
     return success_response(data=stats)
 
 @router.get("/", response_model=dict)
-async def list_users(db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def list_users(db: AsyncSession = Depends(get_db), current_user: User = Depends(RequireScope("users", "read"))):
+    """List all users. Required scope: users:read"""
     min_level = get_user_min_level(current_user)
     query = select(User).options(
         selectinload(User.roles).selectinload(UserRole.role),
@@ -118,8 +120,9 @@ async def create_user(
     details_json: Optional[str] = Form(None),
     file: Optional[UploadFile] = File(None),
     db: AsyncSession = Depends(get_db), 
-    current_user: User = Depends(RequireRoleLevel(2)) # Only Root, Manager, Admin
+    current_user: User = Depends(RequireScope("users", "create"))
 ):
+    """Create a new user. Required scope: users:create"""
     manager_level = get_user_min_level(current_user)
     
     # Parse details
@@ -215,8 +218,9 @@ async def create_user(
 async def extract_user_info(
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(RequireRoleLevel(2))
+    current_user: User = Depends(RequireScope("users", "admin"))
 ):
+    """Extract user information from document. Required scope: users:admin"""
     # Forward the file to doc_extractor service
     try:
         async with httpx.AsyncClient(timeout=60.0) as client:
@@ -246,8 +250,9 @@ async def extract_user_info(
 async def analyze_user_file(
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(RequireRoleLevel(2))
+    current_user: User = Depends(RequireScope("users", "admin"))
 ):
+    """Analyze user file and extract information. Required scope: users:admin"""
     contents = await file.read()
     filename = file.filename.lower()
     text = ""
@@ -313,8 +318,9 @@ async def upload_users(
     request: Request,
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(RequireRoleLevel(2))
+    current_user: User = Depends(RequireScope("users", "create"))
 ):
+    """Bulk upload users from file. Required scope: users:create"""
     contents = await file.read()
     filename = file.filename.lower()
     users_to_create = []
@@ -401,7 +407,8 @@ async def get_me(db: AsyncSession = Depends(get_db), current_user: User = Depend
     return success_response(data=UserResponse.model_validate(user_dict).model_dump(mode='json'))
 
 @router.get("/{id}", response_model=dict)
-async def get_user(id: UUID, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def get_user(id: UUID, db: AsyncSession = Depends(get_db), current_user: User = Depends(RequireScope("users", "read"))):
+    """Get user by ID. Required scope: users:read"""
     target_user = await db.get(User, id)
     if not target_user:
         raise APIException(status.HTTP_404_NOT_FOUND, "not_found", "User not found")
@@ -440,8 +447,9 @@ async def update_user(
     id: UUID, 
     data: UserUpdate, 
     db: AsyncSession = Depends(get_db), 
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(RequireScope("users", "update"))
 ):
+    """Update user. Required scope: users:update"""
     target_user = await db.get(User, id)
     if not target_user:
         raise APIException(status.HTTP_404_NOT_FOUND, "not_found", "User not found")
@@ -484,8 +492,9 @@ async def update_user(
 async def delete_user(
     id: UUID, 
     db: AsyncSession = Depends(get_db), 
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(RequireScope("users", "delete"))
 ):
+    """Delete/deactivate user. Required scope: users:delete"""
     target_user = await db.get(User, id)
     if not target_user:
         raise APIException(status.HTTP_404_NOT_FOUND, "not_found", "User not found")

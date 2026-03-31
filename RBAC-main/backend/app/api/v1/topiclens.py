@@ -42,9 +42,9 @@ async def search_topic(
     db: AsyncSession = Depends(get_db)
 ):
     """
-    Start a new topic search job
+    Start a new topic search job.
     
-    **Permissions Required:** topiclens:access (Root user only)
+    **Required scope:** topiclens:access
     
     - **topic**: The topic or keyword to search for
     - **sources**: List of sources to scrape (e.g., github, reddit, youtube)
@@ -104,9 +104,9 @@ async def get_job_status(
     db: AsyncSession = Depends(get_db)
 ):
     """
-    Get the status of a search job
+    Get the status of a search job.
     
-    **Permissions Required:** topiclens:access (Root user only)
+    **Required scope:** topiclens:access
     """
     try:
         from app.topiclens.database import get_job
@@ -145,9 +145,9 @@ async def analyze_content(
     db: AsyncSession = Depends(get_db)
 ):
     """
-    Analyze content from a URL
+    Analyze content from a URL.
     
-    **Permissions Required:** topiclens:access (Root user only)
+    **Required scope:** topiclens:access
     """
     try:
         from app.topiclens.analyzers.content_analysis import analyze_url
@@ -195,9 +195,9 @@ async def get_available_sources(
     current_user: User = Depends(RequireScope("topiclens", "access"))
 ):
     """
-    Get list of available sources for scraping
+    Get list of available sources for scraping.
     
-    **Permissions Required:** topiclens:access (Root user only)
+    **Required scope:** topiclens:access
     """
     return success_response(
         data={
@@ -214,9 +214,9 @@ async def get_all_jobs(
     offset: int = 0
 ):
     """
-    Get all jobs for current user (or all jobs if root)
+    Get all jobs for current user (or all jobs if root).
     
-    **Permissions Required:** topiclens:access (Root user only)
+    **Required scope:** topiclens:access
     """
     try:
         from app.topiclens.database import get_user_jobs
@@ -241,10 +241,51 @@ async def get_all_jobs(
         )
 
 
+@router.get("/jobs/{job_id}", response_model=dict)
+async def get_job_by_id(
+    job_id: str,
+    current_user: User = Depends(RequireScope("topiclens", "access")),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Get a specific job by ID.
+    
+    **Required scope:** topiclens:access
+    """
+    try:
+        from app.topiclens.database import get_job
+        
+        job = await get_job(db, job_id)
+        
+        if not job:
+            return error_response(
+                error="job_not_found",
+                detail=f"Job {job_id} not found",
+                status_code=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Check if user owns this job
+        if job.user_id != current_user.id and not current_user.email == "root@system.local":
+            return error_response(
+                error="forbidden",
+                detail="You don't have permission to view this job",
+                status_code=status.HTTP_403_FORBIDDEN
+            )
+        
+        return success_response(data=job.to_dict())
+        
+    except Exception as e:
+        return error_response(
+            error="job_fetch_failed",
+            detail=str(e),
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
 @router.get("/health", response_model=dict)
 async def topiclens_health():
     """
-    Health check for TopicLens module
+    Health check for TopicLens module.
     
     **Public endpoint** - No authentication required
     """

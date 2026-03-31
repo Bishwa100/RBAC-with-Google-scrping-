@@ -19,11 +19,21 @@ async def create_request(
     db: AsyncSession = Depends(get_db), 
     current_user: User = Depends(RequireScope("edit_requests", "create"))
 ):
+    """
+    Create a new edit request for a record.
+    
+    **Required scope:** edit_requests:create
+    """
     req = await create_edit_request(data.record_id, current_user, data.reason, db)
     return success_response(data=EditRequestResponse.model_validate(req).model_dump())
 
 @router.get("/", response_model=dict)
-async def list_requests(db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def list_requests(db: AsyncSession = Depends(get_db), current_user: User = Depends(RequireScope("edit_requests", "read"))):
+    """
+    List edit requests (filtered by department/user based on role).
+    
+    **Required scope:** edit_requests:read
+    """
     min_level = get_user_min_level(current_user)
     
     query = select(EditRequest).options(selectinload(EditRequest.steps))
@@ -41,7 +51,12 @@ async def list_requests(db: AsyncSession = Depends(get_db), current_user: User =
     return success_response(data=[EditRequestResponse.model_validate(r).model_dump() for r in reqs])
 
 @router.get("/{id}", response_model=dict)
-async def get_request(id: UUID, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def get_request(id: UUID, db: AsyncSession = Depends(get_db), current_user: User = Depends(RequireScope("edit_requests", "read"))):
+    """
+    Get a specific edit request by ID.
+    
+    **Required scope:** edit_requests:read
+    """
     req = await db.get(EditRequest, id, options=[selectinload(EditRequest.steps)])
     if not req:
         raise APIException(status.HTTP_404_NOT_FOUND, "not_found", "Request not found")
@@ -55,6 +70,11 @@ async def approve_request(
     db: AsyncSession = Depends(get_db), 
     current_user: User = Depends(RequireScope("edit_requests", "approve"))
 ):
+    """
+    Approve or reject an edit request.
+    
+    **Required scope:** edit_requests:approve
+    """
     if data.decision not in ["approved", "rejected"]:
         raise APIException(status.HTTP_400_BAD_REQUEST, "bad_request", "Decision must be 'approved' or 'rejected'")
     req = await process_approval(id, current_user, data.decision, data.comment or "", db)
@@ -67,5 +87,10 @@ async def reject_request(
     db: AsyncSession = Depends(get_db), 
     current_user: User = Depends(RequireScope("edit_requests", "approve"))
 ):
+    """
+    Reject an edit request.
+    
+    **Required scope:** edit_requests:approve
+    """
     req = await process_approval(id, current_user, "rejected", data.comment or "", db)
     return success_response(data=EditRequestResponse.model_validate(req).model_dump())
