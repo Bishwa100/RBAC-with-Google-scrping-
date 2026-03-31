@@ -29,7 +29,7 @@ from app.topiclens.scrapers.twitter_scraper import scrape_twitter
 from app.topiclens.scrapers.quora_scraper import scrape_quora
 from app.topiclens.scrapers.blog_scraper import scrape_blog_articles
 from app.topiclens.llm import generate_search_queries, generate_deep_insights, rank_content, check_ollama_health
-from app.topiclens.database import save_results
+from app.topiclens.database import save_results, update_job_status
 
 # Celery configuration (only if available)
 if CELERY_AVAILABLE:
@@ -515,6 +515,9 @@ def scrape_topic_task(self, topic: str, job_id: str, sources: list = None):
             state="PROGRESS",
             meta={"step": "Local LLM generating queries...", "progress": 10}
         )
+        # Also update PostgreSQL database
+        update_job_status(job_id, "running", "Local LLM generating queries...", 10)
+        
         q = generate_search_queries(topic)
 
         results = {}
@@ -524,6 +527,7 @@ def scrape_topic_task(self, topic: str, job_id: str, sources: list = None):
             state="PROGRESS",
             meta={"step": "Scraping all sources in parallel...", "progress": 30}
         )
+        update_job_status(job_id, "running", "Scraping all sources in parallel...", 30)
 
         # Build scraper tasks dynamically based on selected sources
         scraper_tasks = {}
@@ -575,12 +579,14 @@ def scrape_topic_task(self, topic: str, job_id: str, sources: list = None):
                     state="PROGRESS",
                     meta={"step": f"Scraped {completed}/{len(scraper_tasks)} sources...", "progress": progress}
                 )
+                update_job_status(job_id, "running", f"Scraped {completed}/{len(scraper_tasks)} sources...", progress)
 
         # Step 6: Rank content using LLM
         self.update_state(
             state="PROGRESS",
             meta={"step": "Ranking content using LLM...", "progress": 85}
         )
+        update_job_status(job_id, "running", "Ranking content using LLM...", 85)
         ranked_results = rank_content(topic, results)
 
         # Step 6.5: Save individual URL files for each source
@@ -588,6 +594,7 @@ def scrape_topic_task(self, topic: str, job_id: str, sources: list = None):
             state="PROGRESS",
             meta={"step": "Saving individual URL files...", "progress": 90}
         )
+        update_job_status(job_id, "running", "Saving individual URL files...", 90)
         print(f"[URL Save] Saving individual URL files for job {job_id}")
         total_urls_saved = 0
         for source, data in ranked_results.items():
@@ -601,6 +608,7 @@ def scrape_topic_task(self, topic: str, job_id: str, sources: list = None):
             state="PROGRESS",
             meta={"step": "Local LLM generating deep insights...", "progress": 95}
         )
+        update_job_status(job_id, "running", "Local LLM generating deep insights...", 95)
         insights = generate_deep_insights(topic, ranked_results)
 
         # Calculate totals
@@ -619,13 +627,16 @@ def scrape_topic_task(self, topic: str, job_id: str, sources: list = None):
         # Save to JSON file for inspection
         save_scraped_data_to_file(job_id, topic, final_data)
 
-        # Save to database
+        # Save to database (this also marks job as completed with 100% progress)
         save_results(job_id, topic, final_data)
 
         return final_data
 
     except Exception as e:
         print(f"[Task Error] {e}")
+        # Update job status as failed
+        update_job_status(job_id, "failed", str(e), 0)
+        
         # Return minimal data on error
         error_data = {
             "topic": topic,

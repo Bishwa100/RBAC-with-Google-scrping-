@@ -91,15 +91,20 @@ async def search_topic(
         # Queue the background task
         try:
             from app.topiclens.tasks import scrape_topic_task
+            # Task signature: scrape_topic_task(self, topic, job_id, sources)
             task = scrape_topic_task.delay(
-                job_id=job_id,
-                topic=data.topic,
-                sources=data.sources,
-                deep_analysis=data.deep_analysis
+                data.topic,  # topic is first positional argument
+                job_id,      # job_id is second positional argument
+                data.sources # sources is third positional argument
             )
             task_id = task.id
+            
+            # Update job status to running
+            new_job.status = "running"
+            await db.commit()
         except Exception as task_err:
             # If Celery is not available, run synchronously or mark as pending
+            print(f"Celery task error: {task_err}")
             task_id = None
         
         return success_response(
