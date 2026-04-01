@@ -61,6 +61,11 @@ def get_browser_driver():
         # NOT running headless - using Xvfb virtual display instead
         options = ChromiumOptions()
 
+        # Prefer an explicit browser path when provided
+        browser_path = os.getenv("CHROME_PATH")
+        if browser_path and os.path.exists(browser_path) and hasattr(options, "set_browser_path"):
+            options.set_browser_path(browser_path)
+
         # Keep headed mode (Xvfb provides the display)
         # options.headless(True)  # DO NOT use headless!
 

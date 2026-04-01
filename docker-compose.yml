@@ -86,6 +86,7 @@ services:
       
       # Display (for browser automation)
       - DISPLAY=:99
+      - CHROME_PATH=/usr/bin/chromium
     depends_on:
       postgres:
         condition: service_healthy
@@ -118,6 +119,7 @@ services:
       - TOPICLENS_CELERY_BROKER_URL=redis://redis:6379/0
       - TOPICLENS_CELERY_RESULT_BACKEND=redis://redis:6379/0
       - DISPLAY=:99
+      - CHROME_PATH=/usr/bin/chromium
     volumes:
       - ./RBAC-main/backend:/app
     networks:

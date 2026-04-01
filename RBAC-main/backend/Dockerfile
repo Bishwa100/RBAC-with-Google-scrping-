@@ -4,6 +4,9 @@ WORKDIR /app
 # Install Xvfb for headless browser automation (needed by worker)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     xvfb \
+    chromium \
+    chromium-driver \
+    ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
