@@ -491,7 +491,7 @@ if CELERY_AVAILABLE and celery_app:
 
 
 @celery_task_decorator(bind=True, name="scrape_topic")
-def scrape_topic_task(self, topic: str, job_id: str, sources: list = None):
+def scrape_topic_task(self, topic: str, job_id: str, sources: list = None, max_results: int = 10):
     """
     Main task that orchestrates all scraping/API and LLM operations.
 
@@ -532,33 +532,33 @@ def scrape_topic_task(self, topic: str, job_id: str, sources: list = None):
         # Build scraper tasks dynamically based on selected sources
         scraper_tasks = {}
         if "youtube" in sources:
-            scraper_tasks["youtube"] = (scrape_youtube, q.get("youtube_query", topic))
+            scraper_tasks["youtube"] = (scrape_youtube, q.get("youtube_query", topic), max_results)
         if "github" in sources:
-            scraper_tasks["github"] = (scrape_github_repos, q.get("github_query", topic))
+            scraper_tasks["github"] = (scrape_github_repos, q.get("github_query", topic), max_results)
         if "linkedin" in sources:
-            scraper_tasks["linkedin"] = (scrape_linkedin, q.get("linkedin_query", f"{topic} linkedin"))
+            scraper_tasks["linkedin"] = (scrape_linkedin, q.get("linkedin_query", f"{topic} linkedin"), max_results)
         if "facebook" in sources:
-            scraper_tasks["facebook"] = (scrape_facebook, q.get("facebook_query", f"{topic} facebook groups"))
+            scraper_tasks["facebook"] = (scrape_facebook, q.get("facebook_query", f"{topic} facebook groups"), max_results)
         if "instagram" in sources:
-            scraper_tasks["instagram"] = (scrape_instagram, q.get("instagram_query", f"{topic} instagram"))
+            scraper_tasks["instagram"] = (scrape_instagram, q.get("instagram_query", f"{topic} instagram"), max_results)
         if "twitter" in sources:
-            scraper_tasks["twitter"] = (scrape_twitter, q.get("twitter_query", f"{topic} expert tweets"))
+            scraper_tasks["twitter"] = (scrape_twitter, q.get("twitter_query", f"{topic} expert tweets"), max_results)
         if "quora" in sources:
-            scraper_tasks["quora"] = (scrape_quora, q.get("quora_query", f"{topic} questions answers"))
+            scraper_tasks["quora"] = (scrape_quora, q.get("quora_query", f"{topic} questions answers"), max_results)
         if "blogs" in sources:
-            scraper_tasks["blogs"] = (scrape_blog_articles, q.get("blog_query", f"{topic} tutorial blog"))
+            scraper_tasks["blogs"] = (scrape_blog_articles, q.get("blog_query", f"{topic} tutorial blog"), max_results)
         if "reddit" in sources:
-            scraper_tasks["reddit"] = (scrape_reddit_communities, q.get("reddit_query", topic))
+            scraper_tasks["reddit"] = (scrape_reddit_communities, q.get("reddit_query", topic), max_results)
         if "events" in sources:
-            scraper_tasks["events"] = (scrape_eventbrite, q.get("events_query", f"{topic} workshop"))
+            scraper_tasks["events"] = (scrape_eventbrite, q.get("events_query", f"{topic} workshop"), max_results)
 
         # Execute all scrapers in parallel
         print(f"[PARALLEL] Starting {len(scraper_tasks)} scrapers in parallel...")
         with ThreadPoolExecutor(max_workers=10) as executor:
             # Submit all scraper tasks
             future_to_source = {
-                executor.submit(func, query): source_name
-                for source_name, (func, query) in scraper_tasks.items()
+                executor.submit(func, query, max_results_value): source_name
+                for source_name, (func, query, max_results_value) in scraper_tasks.items()
             }
 
             # Collect results as they complete

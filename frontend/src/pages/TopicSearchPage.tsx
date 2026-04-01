@@ -19,6 +19,7 @@ export default function TopicSearchPage() {
   const [topic, setTopic] = useState('')
   const [selectedSources, setSelectedSources] = useState<string[]>([])
   const [deepAnalysis, setDeepAnalysis] = useState(false)
+  const [maxResults, setMaxResults] = useState(10)
   const [loading, setLoading] = useState(false)
   const [jobId, setJobId] = useState<string | null>(null)
   const [jobStatus, setJobStatus] = useState<JobStatus | null>(null)
@@ -71,6 +72,7 @@ export default function TopicSearchPage() {
         topic: topic.trim(),
         sources: selectedSources,
         deep_analysis: deepAnalysis,
+        max_results: maxResults,
       }
 
       const response = await topiclensAPI.search(request)
@@ -209,6 +211,21 @@ export default function TopicSearchPage() {
                 Enable Deep Analysis (uses local LLM for detailed insights)
               </span>
             </label>
+          </div>
+
+          <div className="mb-4">
+            <label className="block text-sm font-medium mb-2 text-muted">
+              Max Results Per Source
+            </label>
+            <input
+              type="number"
+              min={1}
+              max={50}
+              value={maxResults}
+              onChange={(e) => setMaxResults(Number(e.target.value) || 1)}
+              className="w-full px-4 py-2 bg-bg-surface2 border border-border rounded-lg focus:ring-2 focus:ring-accent focus:border-accent text-text"
+            />
+            <p className="mt-1 text-xs text-muted">Controls how many Google search results are collected per source.</p>
           </div>
 
           {error && (

@@ -39,6 +39,7 @@ class TopicSearchRequest(BaseModel):
     topic: str = Field(..., min_length=1, max_length=200, description="Topic or keyword to search")
     sources: List[str] = Field(..., min_items=1, description="List of sources to scrape")
     deep_analysis: bool = Field(False, description="Enable deep LLM analysis")
+    max_results: int = Field(10, ge=1, le=50, description="Max results per source")
 
 class ContentAnalyzeRequest(BaseModel):
     """Request schema for content analysis"""
@@ -93,9 +94,10 @@ async def search_topic(
             from app.topiclens.tasks import scrape_topic_task
             # Task signature: scrape_topic_task(self, topic, job_id, sources)
             task = scrape_topic_task.delay(
-                data.topic,  # topic is first positional argument
-                job_id,      # job_id is second positional argument
-                data.sources # sources is third positional argument
+                data.topic,       # topic is first positional argument
+                job_id,           # job_id is second positional argument
+                data.sources,     # sources is third positional argument
+                data.max_results  # max_results is fourth positional argument
             )
             task_id = task.id
             

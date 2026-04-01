@@ -6,6 +6,7 @@ class SearchRequest(BaseModel):
     topic: str
     sources: Optional[List[str]] = None  # List of platforms to search, e.g., ["youtube", "reddit", "github"]
                                          # If None or empty, searches all platforms
+    max_results: Optional[int] = 10  # Max results per source (default: 10)
 
 
 class SearchResponse(BaseModel):

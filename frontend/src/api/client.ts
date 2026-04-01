@@ -57,6 +57,7 @@ export interface TopicSearchRequest {
   topic: string
   sources: string[]
   deep_analysis?: boolean
+  max_results?: number
 }
 
 export interface TopicSearchResponse {
