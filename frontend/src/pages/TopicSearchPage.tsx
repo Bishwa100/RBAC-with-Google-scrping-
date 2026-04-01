@@ -12,6 +12,7 @@ interface SearchResult {
   title: string | null
   content: string | null
   summary: string | null
+  thumbnail?: string | null
   rank?: number
 }
 
@@ -127,6 +128,7 @@ export default function TopicSearchPage() {
             title: item.title || item.name || null,
             content: item.content || item.description || null,
             summary: item.summary || item.snippet || null,
+            thumbnail: item.thumbnail || item.thumbnail_url || item.image || null,
             rank: item.rank || index + 1
           })
         })
@@ -324,7 +326,21 @@ export default function TopicSearchPage() {
                         {results.map((result, idx) => (
                           <div key={`${result.source}-${idx}`} className="bg-bg-surface2 p-4 rounded-lg border border-border hover:border-accent/50 transition">
                             <div className="flex items-start justify-between gap-4">
-                              <div className="flex-1 min-w-0">
+                              <div className="flex items-start gap-4 flex-1 min-w-0">
+                                <div className="w-20 h-20 rounded-md bg-bg-surface border border-border overflow-hidden flex-shrink-0">
+                                  {result.thumbnail ? (
+                                    <img
+                                      src={result.thumbnail}
+                                      alt={result.title || 'Result thumbnail'}
+                                      className="w-full h-full object-cover"
+                                      loading="lazy"
+                                      referrerPolicy="no-referrer"
+                                    />
+                                  ) : (
+                                    <div className="w-full h-full bg-gradient-to-br from-bg-surface to-bg-surface2" />
+                                  )}
+                                </div>
+                                <div className="min-w-0 flex-1">
                                 <div className="flex items-center gap-2 mb-2 flex-wrap">
                                   <span className="px-2 py-1 bg-accent/20 text-accent text-xs rounded-full font-medium capitalize">
                                     {result.source}
@@ -352,6 +368,7 @@ export default function TopicSearchPage() {
                                     {result.summary || result.content}
                                   </p>
                                 )}
+                                </div>
                               </div>
                               
                               {isRootUser && (

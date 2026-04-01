@@ -284,18 +284,25 @@ def search_google(query: str, max_results: int = 10, site_filter: str = None) ->
                 snippet_tag = None
                 if result_container:
                     snippet_tag = result_container.select_one('div.VwiC3b, div.kb0980, .yXOvgc')
+                    img_tag = result_container.select_one('img')
+                else:
+                    img_tag = None
 
                 if h3 and link_tag:
                     title = h3.get_text()
                     link = link_tag.get('href')
                     snippet = snippet_tag.get_text() if snippet_tag else "No snippet available"
+                    thumbnail = None
+                    if img_tag:
+                        thumbnail = img_tag.get('src') or img_tag.get('data-src') or img_tag.get('data-iurl')
 
                     # Filter out valid search result links
                     if link and link.startswith('http'):
                         results.append({
                             'title': clean_text(title),
                             'url': link,
-                            'description': clean_text(snippet)
+                            'description': clean_text(snippet),
+                            'thumbnail': thumbnail
                         })
                         page_results_count += 1
 
