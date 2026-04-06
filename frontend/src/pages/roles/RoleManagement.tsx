@@ -20,9 +20,11 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import clsx from 'clsx'
+import { useConfirm } from '../../components/ui/ConfirmProvider'
 
 const RoleManagement: React.FC = () => {
   const queryClient = useQueryClient()
+  const confirmAction = useConfirm()
   const [isCreating, setIsCreating] = useState(false)
   const [formData, setFormData] = useState({
     name: '',
@@ -118,10 +120,10 @@ const RoleManagement: React.FC = () => {
               variant="ghost" 
               size="icon"
               className="text-muted hover:text-danger"
-              onClick={() => {
-                if (window.confirm('IRREVERSIBLE_ACTION: Are you sure you want to delete this clearance stratum?')) {
-                  deleteMutation.mutate(row.original.id as any)
-                }
+              onClick={async () => {
+                const ok = await confirmAction('IRREVERSIBLE_ACTION: Are you sure you want to delete this clearance stratum?')
+                if (!ok) return
+                deleteMutation.mutate(row.original.id as any)
               }}
             >
               <Trash2 size={16} />

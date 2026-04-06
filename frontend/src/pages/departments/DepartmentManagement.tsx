@@ -16,6 +16,7 @@ import {
   FileText
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { useConfirm } from '../../components/ui/ConfirmProvider'
 
 const DepartmentManagement: React.FC = () => {
   const queryClient = useQueryClient()
@@ -57,6 +58,8 @@ const DepartmentManagement: React.FC = () => {
     }
   })
 
+  const confirmAction = useConfirm()
+
   const columns: ColumnDef<Department>[] = [
     {
       accessorKey: 'name',
@@ -97,10 +100,10 @@ const DepartmentManagement: React.FC = () => {
             variant="ghost" 
             size="icon"
             className="text-muted hover:text-danger"
-            onClick={() => {
-              if (window.confirm('IRREVERSIBLE_ACTION: Decommissioning a sector will impact all associated personnel and clearances. Proceed?')) {
-                deleteMutation.mutate(row.original.id as any)
-              }
+            onClick={async () => {
+              const ok = await confirmAction('IRREVERSIBLE_ACTION: Decommissioning a sector will impact all associated personnel and clearances. Proceed?')
+              if (!ok) return
+              deleteMutation.mutate(row.original.id as any)
             }}
           >
             <Trash2 size={16} />

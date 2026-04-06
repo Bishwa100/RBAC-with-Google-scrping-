@@ -16,6 +16,7 @@ import {
   FileText
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { useConfirm } from '../../components/ui/ConfirmProvider'
 
 const ScopeManagement: React.FC = () => {
   const queryClient = useQueryClient()
@@ -56,6 +57,8 @@ const ScopeManagement: React.FC = () => {
       toast.error(error.response?.data?.detail || 'DECOMMISSION_FAILED')
     }
   })
+
+  const confirmAction = useConfirm()
 
   const columns: ColumnDef<Scope>[] = [
     {
@@ -98,10 +101,10 @@ const ScopeManagement: React.FC = () => {
             variant="ghost" 
             size="icon"
             className="text-muted hover:text-danger"
-            onClick={() => {
-              if (window.confirm('IRREVERSIBLE_ACTION: Decommissioning a scope will revoke access for all associated operatives. Proceed?')) {
-                deleteMutation.mutate(row.original.id as any)
-              }
+            onClick={async () => {
+              const ok = await confirmAction('IRREVERSIBLE_ACTION: Decommissioning a scope will revoke access for all associated operatives. Proceed?')
+              if (!ok) return
+              deleteMutation.mutate(row.original.id as any)
             }}
           >
             <Trash2 size={16} />

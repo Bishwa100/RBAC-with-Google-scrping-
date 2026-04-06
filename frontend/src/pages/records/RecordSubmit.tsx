@@ -8,6 +8,7 @@ import RecordForm, { RecordPayload } from '../../components/records/RecordForm'
 import { ArrowLeft, Upload, FileJson, ChevronRight, ShieldCheck, ClipboardList } from 'lucide-react'
 import { toast } from 'sonner'
 import clsx from 'clsx'
+import { useConfirm } from '../../components/ui/ConfirmProvider'
 
 const RECORD_TYPES = [
   { value: 'attendance_log', label: 'Attendance Log', desc: 'Daily attendance and check-in records' },
@@ -45,6 +46,8 @@ const RecordSubmit: React.FC = () => {
     }
   })
 
+  const confirmAction = useConfirm()
+
   const validate = () => {
     const newErrors: Record<string, string> = {}
     
@@ -78,7 +81,11 @@ const RecordSubmit: React.FC = () => {
   }
 
   const handleSubmit = () => {
-    mutation.mutate({ record_type: recordType, payload: formData })
+    ;(async () => {
+      const confirmed = await confirmAction(`Are you sure you want to submit and permanently freeze this record? This action cannot be undone.`)
+      if (!confirmed) return
+      mutation.mutate({ record_type: recordType, payload: formData })
+    })()
   }
 
   return (

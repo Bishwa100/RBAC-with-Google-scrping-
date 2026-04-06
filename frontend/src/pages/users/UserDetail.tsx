@@ -41,6 +41,7 @@ import {
 import { toast } from 'sonner'
 import clsx from 'clsx'
 import { useAuthStore } from '../../store/authStore'
+import { useConfirm } from '../../components/ui/ConfirmProvider'
 
 const UserDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>()
@@ -125,6 +126,8 @@ const UserDetail: React.FC = () => {
     }
   })
 
+  const confirmAction = useConfirm()
+
   if (isUserLoading) return <PageWrapper title="Loading..."><div className="animate-pulse font-mono">ENCRYPTING_CHANNEL...</div></PageWrapper>
   if (!user) return <PageWrapper title="Error"><div className="text-danger font-mono">OPERATIVE_NOT_FOUND</div></PageWrapper>
 
@@ -187,7 +190,11 @@ const UserDetail: React.FC = () => {
                 <Button 
                   variant={user.is_active ? 'outline' : 'default'} 
                   className={clsx("w-full space-x-2", user.is_active && "border-danger text-danger hover:bg-danger/10")}
-                  onClick={() => toggleStatusMutation.mutate(!user.is_active)}
+                  onClick={async () => {
+                    const ok = await confirmAction(user.is_active ? 'Suspend this operative? This will disable their access.' : 'Reinstate this operative?')
+                    if (!ok) return
+                    toggleStatusMutation.mutate(!user.is_active)
+                  }}
                   isLoading={toggleStatusMutation.isPending}
                 >
                   {user.is_active ? (
@@ -340,7 +347,11 @@ const UserDetail: React.FC = () => {
                       <span>{role.name.toUpperCase()} (Lvl {role.level})</span>
                       {user.roles.length > 1 && (
                         <button 
-                          onClick={() => delRoleMutation.mutate(role.id)}
+                          onClick={async () => {
+                            const ok = await confirmAction('Revoke this clearance level from the operative?')
+                            if (!ok) return
+                            delRoleMutation.mutate(role.id)
+                          }}
                           className="hover:text-danger transition-colors"
                         >
                           <Trash2 size={12} />
@@ -392,7 +403,11 @@ const UserDetail: React.FC = () => {
                         <div className="text-xs text-text">{scope.action.toUpperCase()}</div>
                       </div>
                       <button 
-                        onClick={() => delScopeMutation.mutate(scope.id)}
+                        onClick={async () => {
+                          const ok = await confirmAction('Revoke this scope from the operative?')
+                          if (!ok) return
+                          delScopeMutation.mutate(scope.id)
+                        }}
                         className="text-dim hover:text-danger opacity-0 group-hover:opacity-100 transition-all"
                       >
                         <Trash2 size={14} />

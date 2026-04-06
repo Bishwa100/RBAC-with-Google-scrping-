@@ -8,6 +8,7 @@ import { useAuthStore } from '../../store/authStore'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
+import { useConfirm } from '../ui/ConfirmProvider'
 
 interface ApprovalTimelineProps {
   request: EditRequest;
@@ -17,6 +18,7 @@ const ApprovalTimeline: React.FC<ApprovalTimelineProps> = ({ request }) => {
   const { minRoleLevel } = useAuthStore()
   const queryClient = useQueryClient()
   const [approveComment, setApproveComment] = useState('')
+  const confirmAction = useConfirm()
 
   const approveMutation = useMutation({
     mutationFn: (id: string) => approveEditRequest(id, approveComment),
@@ -129,7 +131,11 @@ const ApprovalTimeline: React.FC<ApprovalTimelineProps> = ({ request }) => {
                       <Button 
                         size="sm" 
                         className="bg-success hover:bg-success/90 text-xs w-full py-1.5"
-                        onClick={() => approveMutation.mutate(request.id)}
+                        onClick={async () => {
+                          const ok = await confirmAction('Grant access for this edit request?')
+                          if (!ok) return
+                          approveMutation.mutate(request.id)
+                        }}
                         isLoading={approveMutation.isPending}
                       >
                         GRANT_ACCESS
@@ -138,7 +144,11 @@ const ApprovalTimeline: React.FC<ApprovalTimelineProps> = ({ request }) => {
                         size="sm" 
                         variant="danger" 
                         className="text-xs w-full py-1.5"
-                        onClick={() => rejectMutation.mutate(request.id)}
+                        onClick={async () => {
+                          const ok = await confirmAction('Deny access for this edit request?')
+                          if (!ok) return
+                          rejectMutation.mutate(request.id)
+                        }}
                         isLoading={rejectMutation.isPending}
                       >
                         DENY_ACCESS

@@ -5,6 +5,7 @@ import { createEditRequest } from '../../api/editRequests'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { ShieldAlert, Info, ChevronRight, FileText } from 'lucide-react'
+import { useConfirm } from '../ui/ConfirmProvider'
 
 interface RequestEditModalProps {
   isOpen: boolean;
@@ -16,6 +17,7 @@ const RequestEditModal: React.FC<RequestEditModalProps> = ({ isOpen, onClose, re
   const [step, setStep] = useState(1)
   const [reason, setReason] = useState('')
   const queryClient = useQueryClient()
+  const confirmAction = useConfirm()
 
   const mutation = useMutation({
     mutationFn: (data: { record_id: string, reason: string }) => createEditRequest(data),
@@ -35,7 +37,11 @@ const RequestEditModal: React.FC<RequestEditModalProps> = ({ isOpen, onClose, re
       toast.error('REASON_TOO_SHORT_MIN_10_CHARS')
       return
     }
-    mutation.mutate({ record_id: recordId, reason })
+    ;(async () => {
+      const confirmed = await confirmAction('Broadcast this edit request to the approval pipeline?')
+      if (!confirmed) return
+      mutation.mutate({ record_id: recordId, reason })
+    })()
   }
 
   const handleClose = () => {
