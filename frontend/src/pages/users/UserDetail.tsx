@@ -82,9 +82,20 @@ const UserDetail: React.FC = () => {
   })
 
   const user = userResponse?.data
-  const userScopes = userScopesResponse?.data || []
-  const allRoles = rolesResponse?.data || []
-  const allScopes = allScopesResponse?.data || []
+
+  const extractArray = (maybeArrayOrObj: any) => {
+    if (!maybeArrayOrObj) return []
+    if (Array.isArray(maybeArrayOrObj)) return maybeArrayOrObj
+    if (Array.isArray(maybeArrayOrObj.data)) return maybeArrayOrObj.data
+    if (Array.isArray(maybeArrayOrObj.items)) return maybeArrayOrObj.items
+    if (Array.isArray(maybeArrayOrObj.results)) return maybeArrayOrObj.results
+    if (typeof maybeArrayOrObj === 'object') return Object.values(maybeArrayOrObj)
+    return []
+  }
+
+  const userScopes = extractArray(userScopesResponse)
+  const allRoles = extractArray(rolesResponse)
+  const allScopes = extractArray(allScopesResponse)
 
   const toggleStatusMutation = useMutation({
     mutationFn: (active: boolean) => updateUser(id!, { is_active: active }),
